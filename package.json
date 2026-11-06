@@ -6,13 +6,14 @@
   "scripts": {
     "test:syntax": "node scripts/check-syntax.js",
     "test:pwa": "node scripts/validate-pwa.js && node tests/test_pwa.js",
-    "test:unit": "node tests/test_reader.js && node tests/test_tts_controller.js && node tests/test_regressions.js && node tests/test_storage.js",
+    "test:unit": "node tests/test_reader.js && node tests/test_tts_controller.js && node tests/test_regressions.js && node tests/test_storage.js && node tests/test_rigorous_edge_cases.js",
     "test:regressions": "node tests/test_regressions.js",
     "test:empirical": "node tests/test_empirical_stress.js",
+    "test:edge-cases": "node tests/test_rigorous_edge_cases.js",
     "test:smoke": "node scripts/smoke-playwright.js",
     "test:deep": "node scripts/deep-playwright.js",
     "test:chromium": "node scripts/smoke-chromium.js",
-    "test": "node scripts/check-syntax.js && node scripts/validate-pwa.js && node tests/test_reader.js && node tests/test_tts_controller.js && node tests/test_regressions.js && node tests/test_empirical_stress.js && node tests/test_storage.js",
+    "test": "node scripts/check-syntax.js && node scripts/validate-pwa.js && node tests/test_reader.js && node tests/test_tts_controller.js && node tests/test_regressions.js && node tests/test_empirical_stress.js && node tests/test_storage.js && node tests/test_rigorous_edge_cases.js",
     "lint": "npx --yes eslint@8.57.1 --ext .js,.mjs src scripts tests",
     "test:storage": "node tests/test_storage.js"
   },
