@@ -8,6 +8,12 @@ const vm = require('node:vm');
 const SW_PATH = path.join(__dirname, '../sw.js');
 const SW_SOURCE = fs.readFileSync(SW_PATH, 'utf8');
 
+const cacheNameMatch = SW_SOURCE.match(/const\s+CACHE_NAME\s*=\s*['"]([^'"]+)['"]/);
+const CURRENT_CACHE_NAME = cacheNameMatch ? cacheNameMatch[1] : 'reader-webapp-shell-v11';
+
+const appShellMatches = SW_SOURCE.match(/const\s+APP_SHELL\s*=\s*\[([\s\S]*?)\];/);
+const APP_SHELL_COUNT = appShellMatches ? (appShellMatches[1].match(/'[^']+'/g) || []).length : 27;
+
 class FakeResponse {
   constructor(body = '', { ok = true, status = 200 } = {}) {
     this.body = body;
@@ -144,14 +150,14 @@ function resetRuntime() {
 
 async function testInstallAndActivateVersionedCaches() {
   resetRuntime();
-  queueFetch(...Array.from({ length: 27 }, () => new FakeResponse('asset')));
+  queueFetch(...Array.from({ length: APP_SHELL_COUNT }, () => new FakeResponse('asset')));
 
   const installEvent = makeEvent();
   eventHandlers.get('install')(installEvent);
   await drainWaitUntil();
 
   assert.equal(self.skipWaitingCalls > 0, true, 'install should call skipWaiting');
-  assert.equal(cachesByName.has('reader-webapp-shell-v11'), true, 'install should create current cache');
+  assert.equal(cachesByName.has(CURRENT_CACHE_NAME), true, 'install should create current cache');
 
   cachesByName.set('reader-webapp-shell-v9', new FakeCache());
   cachesByName.set('reader-webapp-shell-v10', new FakeCache());
@@ -162,7 +168,7 @@ async function testInstallAndActivateVersionedCaches() {
 
   assert.equal(cachesByName.has('reader-webapp-shell-v9'), false, 'old reader cache should be deleted');
   assert.equal(cachesByName.has('reader-webapp-shell-v10'), false, 'previous reader cache should be deleted');
-  assert.equal(cachesByName.has('reader-webapp-shell-v11'), true, 'current reader cache should remain');
+  assert.equal(cachesByName.has(CURRENT_CACHE_NAME), true, 'current reader cache should remain');
   assert.equal(cachesByName.has('unrelated-cache'), true, 'unrelated caches should not be deleted');
   assert.equal(self.clients.claimCalls > 0, true, 'activate should claim clients');
 }
@@ -170,7 +176,7 @@ async function testInstallAndActivateVersionedCaches() {
 async function testVendorUsesStaleWhileRevalidate() {
   resetRuntime();
   const cache = new FakeCache();
-  cachesByName.set('reader-webapp-shell-v11', cache);
+  cachesByName.set(CURRENT_CACHE_NAME, cache);
   const request = new FakeRequest('https://reader.example.test/vendor/marked.esm.mjs');
   await cache.put(request, new FakeResponse('old-vendor'));
   queueFetch(new FakeResponse('new-vendor'));
@@ -186,10 +192,29 @@ async function testVendorUsesStaleWhileRevalidate() {
   assert.equal((await cache.match(request)).body, 'new-vendor', 'revalidated vendor response should replace stale cache');
 }
 
+async function testAppShellUsesStaleWhileRevalidate() {
+  resetRuntime();
+  const cache = new FakeCache();
+  cachesByName.set(CURRENT_CACHE_NAME, cache);
+  const request = new FakeRequest('https://reader.example.test/style.css');
+  await cache.put(request, new FakeResponse('old-style'));
+  queueFetch(new FakeResponse('new-style'));
+
+  const event = makeEvent({ request });
+  eventHandlers.get('fetch')(event);
+  const response = await event.responses[0];
+  await drainWaitUntil();
+
+  assert.equal(response.body, 'old-style', 'app shell request should return cached content immediately');
+  assert.equal(fetchCalls.length, 1, 'cached app shell request should revalidate once');
+  assert.equal(fetchCalls[0].options.cache, 'no-cache', 'app shell revalidation should bypass browser HTTP cache');
+  assert.equal((await cache.match(request)).body, 'new-style', 'revalidated app shell response should replace stale cache');
+}
+
 async function testVendorOfflineFallback() {
   resetRuntime();
   const cache = new FakeCache();
-  cachesByName.set('reader-webapp-shell-v11', cache);
+  cachesByName.set(CURRENT_CACHE_NAME, cache);
   const request = new FakeRequest('https://reader.example.test/vendor/marked.esm.mjs');
   await cache.put(request, new FakeResponse('cached-marked'));
   queueFetch(new Error('offline'));
@@ -205,7 +230,7 @@ async function testVendorOfflineFallback() {
 async function testCanonicalNavigationFallsBackOnServerError() {
   resetRuntime();
   const cache = new FakeCache();
-  cachesByName.set('reader-webapp-shell-v11', cache);
+  cachesByName.set(CURRENT_CACHE_NAME, cache);
   await cache.put(new FakeRequest('https://reader.example.test/index.html'), new FakeResponse('cached-shell'));
   queueFetch(new FakeResponse('server-error', { ok: false, status: 503 }));
 
@@ -220,7 +245,7 @@ async function testCanonicalNavigationFallsBackOnServerError() {
 async function testNonCanonicalNavigationKeepsServerError() {
   resetRuntime();
   const cache = new FakeCache();
-  cachesByName.set('reader-webapp-shell-v11', cache);
+  cachesByName.set(CURRENT_CACHE_NAME, cache);
   await cache.put(new FakeRequest('https://reader.example.test/index.html'), new FakeResponse('cached-shell'));
   const serverError = new FakeResponse('not-found', { ok: false, status: 404 });
   queueFetch(serverError);
@@ -236,7 +261,7 @@ async function testNonCanonicalNavigationKeepsServerError() {
 async function testNonCanonicalNavigationDoesNotUseAppShellWhenOffline() {
   resetRuntime();
   const cache = new FakeCache();
-  cachesByName.set('reader-webapp-shell-v11', cache);
+  cachesByName.set(CURRENT_CACHE_NAME, cache);
   await cache.put(new FakeRequest('https://reader.example.test/index.html'), new FakeResponse('cached-shell'));
   queueFetch(new Error('offline'));
 
@@ -252,6 +277,7 @@ async function run() {
   const tests = [
     ['versioned cache install/activate', testInstallAndActivateVersionedCaches],
     ['vendor stale-while-revalidate', testVendorUsesStaleWhileRevalidate],
+    ['app shell stale-while-revalidate', testAppShellUsesStaleWhileRevalidate],
     ['vendor offline fallback', testVendorOfflineFallback],
     ['navigation fallback on HTTP error', testCanonicalNavigationFallsBackOnServerError],
     ['non-canonical navigation preserves HTTP error', testNonCanonicalNavigationKeepsServerError],

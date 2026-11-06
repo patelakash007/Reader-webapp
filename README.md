@@ -44,10 +44,10 @@ Use a local server or the hosted app to test service-worker and PWA behavior. Op
 
 ```text
 reader-webapp/
-├── .github/workflows/quality-checks.yml  # CI checks
+├── .github/workflows/quality-checks.yml  # CI hygiene, unit, regression and browser tests
 ├── icons/                                # PWA icons
-├── scripts/                              # Syntax, browser and PWA test helpers
-├── tests/                                # Unit, regression, stress and PWA tests
+├── scripts/                              # Syntax, browser, and PWA test helpers
+├── tests/                                # Unit, regression, stress, storage and PWA tests
 ├── src/
 │   ├── app.mjs                           # Application initialization
 │   ├── markdown-parser.mjs               # Markdown parsing and safe rendering
@@ -82,13 +82,14 @@ Run the main checks:
 npm test
 ```
 
-This runs syntax/import validation, app-shell validation, unit and regression tests, empirical stress tests, and browser-storage cleanup regression tests. CI also runs the pinned ESLint check and browser smoke/deep-regression suites.
+This runs syntax/import validation, PWA app-shell validation, PWA service worker behavior tests, unit and regression tests, empirical stress tests, and browser-storage cleanup regression tests. CI also runs the pinned ESLint check and browser smoke/deep-regression suites.
 
 Additional checks are available:
 
 | Command | What it checks |
 | --- | --- |
 | `npm run test:pwa` | PWA app-shell validation and service-worker behavior |
+| `npm run test:regressions` | Regression test suite including storage isolation checks |
 | `npm run test:smoke` | Browser smoke tests and basic reader interactions |
 | `npm run test:deep` | Deeper browser regression checks |
 | `npm run test:chromium` | Lightweight Chromium-only smoke test |

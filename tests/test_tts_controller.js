@@ -300,6 +300,36 @@ function classList() {
   assert(estimateContext.runtime.tts.currentWordIndex >= 0, 'Word highlight should advance via estimate timer');
   estimateController.stopTTS();
 
+  // Test unsupported TTS environment
+  const unsupportedContext = createAppContext({
+    voiceRateInput: { value: '1.0' },
+    readerContent: { querySelectorAll: () => [], contains: () => true }
+  });
+  unsupportedContext.runtime.tts.supported = false;
+  unsupportedContext.runtime.tts.synth = null;
+  const unsupportedController = createTTS(unsupportedContext, { ui: { showStatus() {}, announceLive() {} } });
+  assert.doesNotThrow(() => {
+    unsupportedController.startSpeech(0);
+    unsupportedController.pauseSpeech();
+    unsupportedController.resumeSpeech();
+    unsupportedController.toggleTTS();
+    unsupportedController.stopTTS();
+    unsupportedController.populateVoices();
+  }, 'Unsupported TTS environment methods must not throw');
+  assert.strictEqual(unsupportedContext.runtime.tts.state, 'idle');
+
+  // Test startSpeech boundary clamping
+  const boundsFixture = createFixture(false);
+  boundsFixture.controller.startSpeech(-10);
+  assert.strictEqual(boundsFixture.session.state, 'playing');
+  assert.strictEqual(boundsFixture.session.currentWordIndex, 0, 'Negative word index should clamp to 0');
+  boundsFixture.controller.stopTTS();
+
+  boundsFixture.controller.startSpeech(999);
+  assert.strictEqual(boundsFixture.session.state, 'playing');
+  assert.strictEqual(boundsFixture.session.currentWordIndex, boundsFixture.session.wordMeta.length - 1, 'Out-of-bounds index should clamp to last word');
+  boundsFixture.controller.stopTTS();
+
   console.log('Production TTS controller state-machine tests passed.');
 })().catch(error => {
   console.error(error);

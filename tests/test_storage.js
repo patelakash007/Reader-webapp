@@ -69,6 +69,17 @@ const assert = require('node:assert/strict');
     assert.equal(accessibleSessionStorage.getItem('reader_text'), null, 'sessionStorage cleanup should continue when localStorage access is blocked');
     assert.equal(accessibleSessionStorage.getItem('session_unrelated'), 'keep', 'storage access failures must not trigger broad deletion');
 
+    const throwingStorage = {
+      removeItem(key) {
+        if (key === 'reader_text') throw new Error('Storage write failed or quota exceeded');
+      }
+    };
+    setWindow({ localStorage: throwingStorage, sessionStorage: null });
+    assert.doesNotThrow(() => cleanupLegacyBrowserStorage(), 'cleanupLegacyBrowserStorage must handle throwing removeItem gracefully');
+
+    delete globalThis.window;
+    assert.doesNotThrow(() => cleanupLegacyBrowserStorage(), 'cleanupLegacyBrowserStorage must not throw when window is undefined');
+
     console.log('Browser storage cleanup tests passed.');
   } finally {
     if (originalWindow) {

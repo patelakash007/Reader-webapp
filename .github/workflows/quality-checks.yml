@@ -6,6 +6,13 @@ on:
     branches:
       - main
 
+concurrency:
+  group: quality-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
 jobs:
   hygiene:
     name: Repository hygiene
@@ -24,6 +31,13 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Cache Playwright browser
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright Chromium for smoke tests
         run: npx playwright-core install --with-deps chromium
 
@@ -37,6 +51,8 @@ jobs:
             "style.css"
             "script.js"
             "src/app.mjs"
+            "manifest.webmanifest"
+            "sw.js"
             "README.md"
             "LICENSE"
             "vendor/marked.esm.mjs"
@@ -85,3 +101,11 @@ jobs:
 
       - name: Run deep browser regression
         run: npm run test:deep
+
+      - name: Upload browser test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-smoke-output
+          path: output/browser-smoke/
+          if-no-files-found: ignore

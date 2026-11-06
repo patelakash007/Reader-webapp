@@ -1,3 +1,4 @@
+const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const {
@@ -5,6 +6,7 @@ const {
   ensureOutputDir,
   findBrowserExecutable,
   outputDir,
+  rootDir,
   startStaticServer,
   waitForServer,
   writeJson
@@ -192,10 +194,10 @@ async function runDeepPlaywrightChecks() {
     const title = await page.title();
     await page.waitForSelector('#app');
     assert(/Reader Webapp/i.test(title), `Unexpected page title: ${title}`);
+    const srcDir = path.join(rootDir, 'src');
     const moduleFiles = [
-      './src/app.mjs', './src/constants.mjs', './src/context.mjs', './src/dom.mjs',
-      './src/parser.mjs', './src/reader.mjs', './src/settings.mjs', './src/storage.mjs',
-      './src/tts.mjs', './src/ui.mjs', './src/utils.mjs'
+      ...fs.readdirSync(srcDir).filter(f => f.endsWith('.mjs')).sort().map(f => `./src/${f}`),
+      './vendor/marked.esm.mjs'
     ];
     const moduleStatuses = await page.evaluate(async files => Promise.all(files.map(async file => {
       const response = await fetch(file, { cache: 'no-store' });

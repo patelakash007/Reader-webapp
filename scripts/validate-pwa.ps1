@@ -14,6 +14,9 @@ $requiredPaths = @(
   'icons/maskable-512.png'
 )
 
+$srcFiles = Get-ChildItem -Path (Join-Path $projectRoot "src") -Filter "*.mjs" | ForEach-Object { "src/$($_.Name)" }
+$requiredPaths += $srcFiles
+
 $missing = $requiredPaths | Where-Object {
   -not (Test-Path -LiteralPath (Join-Path $projectRoot $_) -PathType Leaf)
 }

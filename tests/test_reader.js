@@ -52,6 +52,20 @@ const path = require('node:path');
   assert.deepStrictEqual(giantChunks.map(chunk => chunk.text.length), [190, 60]);
   console.log('✓ Check 2: 190-character chunking algorithm passed.');
 
+  const utf8Buffer = new Uint8Array([0x48, 0x65, 0x6C, 0x6C, 0x6F]);
+  assert.strictEqual(parser.decodeTextBuffer(utf8Buffer), 'Hello');
+  const utf8BomBuffer = new Uint8Array([0xEF, 0xBB, 0xBF, 0x48, 0x69]);
+  assert.strictEqual(parser.decodeTextBuffer(utf8BomBuffer), 'Hi');
+  const utf16leBomBuffer = new Uint8Array([0xFF, 0xFE, 0x48, 0x00, 0x69, 0x00]);
+  assert.strictEqual(parser.decodeTextBuffer(utf16leBomBuffer), 'Hi');
+  const utf16beBomBuffer = new Uint8Array([0xFE, 0xFF, 0x00, 0x48, 0x00, 0x69]);
+  assert.strictEqual(parser.decodeTextBuffer(utf16beBomBuffer), 'Hi');
+  const win1252Buffer = new Uint8Array([0x93, 0x48, 0x69, 0x94]);
+  assert.strictEqual(parser.decodeTextBuffer(win1252Buffer), '“Hi”');
+  const parserInstance = parser.createParser(initialContext);
+  assert.strictEqual(typeof parserInstance.enforceExtractedTextLimit, 'function');
+  assert.strictEqual(typeof parserInstance.parseMarkdownToHtml, 'function');
+  console.log('✓ Check 3: Text buffer decoding (UTF-8, BOMs, Windows-1252) and parser factory passed.');
 
   const mockVoices = [
     { name: 'Google US English', lang: 'en-US', voiceURI: 'google-en-us', default: false },

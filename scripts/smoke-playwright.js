@@ -1,9 +1,11 @@
+const fs = require('node:fs');
 const path = require('node:path');
 const {
   browserEnvVars,
   ensureOutputDir,
   findBrowserExecutable,
   outputDir,
+  rootDir,
   startStaticServer,
   waitForServer,
   writeJson
@@ -76,10 +78,10 @@ async function runPlaywrightSmoke() {
       throw new Error(`Unexpected page title: ${title}`);
     }
 
+    const srcDir = path.join(rootDir, 'src');
     const moduleFiles = [
-      './src/app.mjs', './src/constants.mjs', './src/context.mjs', './src/dom.mjs',
-      './src/parser.mjs', './src/reader.mjs', './src/settings.mjs', './src/storage.mjs',
-      './src/tts.mjs', './src/ui.mjs', './src/utils.mjs'
+      ...fs.readdirSync(srcDir).filter(f => f.endsWith('.mjs')).sort().map(f => `./src/${f}`),
+      './vendor/marked.esm.mjs'
     ];
     const moduleRequests = await page.evaluate(async files => {
       const responses = await Promise.all(files.map(async file => {
