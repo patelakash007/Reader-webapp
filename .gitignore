@@ -24,9 +24,5 @@ playwright-*.png
 # Dependency, build, and coverage output
 node_modules/
 .cache/
-dist/
 build/
 coverage/
-android/
-*.apk
-*.aab
