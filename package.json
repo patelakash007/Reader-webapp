@@ -4,7 +4,6 @@
   "private": true,
   "description": "Local-first browser reader app.",
   "scripts": {
-    "build": "node scripts/build-dist.js",
     "test:syntax": "node scripts/check-syntax.js",
     "test:pwa": "node scripts/validate-pwa.js && node tests/test_pwa.js",
     "test:unit": "node tests/test_reader.js && node tests/test_tts_controller.js && node tests/test_regressions.js && node tests/test_storage.js",
