@@ -24,6 +24,25 @@ function runBrowser(executablePath, args, stdio = 'pipe') {
   });
 }
 
+function hasSandboxFailure(stderr = '') {
+  return /No usable sandbox/i.test(stderr);
+}
+
+async function runBrowserWithSandboxFallback(executablePath, args, stdio = 'pipe') {
+  const initialResult = await runBrowser(executablePath, args, stdio);
+
+  if (initialResult.code === 0 || !hasSandboxFailure(initialResult.stderr)) {
+    return initialResult;
+  }
+
+  const retryArgs = [...args, '--no-sandbox'];
+  const retryResult = await runBrowser(executablePath, retryArgs, stdio);
+  return {
+    ...retryResult,
+    usedNoSandboxFallback: true
+  };
+}
+
 async function runChromiumSmoke() {
   ensureOutputDir();
   const browser = findBrowserExecutable();
@@ -53,7 +72,7 @@ async function runChromiumSmoke() {
       '--window-size=1280,900'
     ];
 
-    const domResult = await runBrowser(browser.path, [...commonArgs, '--dump-dom', url]);
+    const domResult = await runBrowserWithSandboxFallback(browser.path, [...commonArgs, '--dump-dom', url]);
     fs.writeFileSync(htmlPath, domResult.stdout || '');
 
     if (domResult.code !== 0) {
@@ -64,7 +83,7 @@ async function runChromiumSmoke() {
       throw new Error('Chromium DOM smoke did not find the app shell marker.');
     }
 
-    const screenshotResult = await runBrowser(browser.path, [
+    const screenshotResult = await runBrowserWithSandboxFallback(browser.path, [
       ...commonArgs,
       `--screenshot=${screenshotPath}`,
       url
@@ -72,6 +91,10 @@ async function runChromiumSmoke() {
 
     if (screenshotResult.code !== 0) {
       throw new Error(`Chromium screenshot smoke failed with exit code ${screenshotResult.code}: ${screenshotResult.stderr}`);
+    }
+
+    if (domResult.usedNoSandboxFallback || screenshotResult.usedNoSandboxFallback) {
+      console.warn('Chromium sandbox was unavailable; retried smoke checks with --no-sandbox.');
     }
 
     writeJson('chromium-smoke.json', {
