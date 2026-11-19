@@ -81,6 +81,41 @@ function findBrowserExecutable() {
   return candidateBrowserPaths().find(candidate => fileExists(candidate.path)) || null;
 }
 
+async function launchChromiumWithFallback(playwright, browserExecutable) {
+  const launchOptions = { headless: true };
+  if (browserExecutable && browserExecutable.source !== 'common path') {
+    return {
+      browser: await playwright.module.chromium.launch({
+        ...launchOptions,
+        executablePath: browserExecutable.path
+      }),
+      browserExecutable
+    };
+  }
+
+  try {
+    return {
+      browser: await playwright.module.chromium.launch(launchOptions),
+      browserExecutable: null
+    };
+  } catch (error) {
+    if (browserExecutable) {
+      return {
+        browser: await playwright.module.chromium.launch({
+          ...launchOptions,
+          executablePath: browserExecutable.path
+        }),
+        browserExecutable
+      };
+    }
+    if (playwright.packageName === 'playwright-core') {
+      console.warn('Playwright is available, but no browser executable was detected.');
+      console.warn(`Set one of these env vars to force a Chromium-compatible executable: ${browserEnvVars.join(', ')}`);
+    }
+    throw error;
+  }
+}
+
 function isInsideRoot(filePath) {
   const relativePath = path.relative(rootDir, filePath);
   return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
@@ -172,6 +207,7 @@ module.exports = {
   browserEnvVars,
   ensureOutputDir,
   findBrowserExecutable,
+  launchChromiumWithFallback,
   outputDir,
   rootDir,
   startStaticServer,

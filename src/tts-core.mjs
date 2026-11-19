@@ -90,6 +90,18 @@ export function tokenizeReaderDOM(containerElement, documentObject = document) {
   const wordMeta = [];
   if (!containerElement) return { spans: wordSpans, meta: wordMeta, text: '' };
 
+  if (typeof containerElement.querySelectorAll === 'function') {
+    const existingSpans = containerElement.querySelectorAll('.tts-word');
+    if (existingSpans && existingSpans.length) {
+      Array.from(existingSpans).forEach(span => {
+        if (span.parentNode && typeof documentObject.createTextNode === 'function') {
+          span.parentNode.replaceChild(documentObject.createTextNode(span.textContent || ''), span);
+        }
+      });
+      if (typeof containerElement.normalize === 'function') containerElement.normalize();
+    }
+  }
+
   const filterShowText = typeof NodeFilter !== 'undefined' ? NodeFilter.SHOW_TEXT : 4;
   const filterAccept = typeof NodeFilter !== 'undefined' ? NodeFilter.FILTER_ACCEPT : 1;
   const filterReject = typeof NodeFilter !== 'undefined' ? NodeFilter.FILTER_REJECT : 2;
@@ -118,7 +130,7 @@ export function tokenizeReaderDOM(containerElement, documentObject = document) {
   textNodes.forEach(textNode => {
     const text = textNode.nodeValue;
     const parentBlock = textNode.parentElement
-      ? textNode.parentElement.closest('p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, table')
+      ? textNode.parentElement.closest('p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, td, th, tr, table')
       : null;
 
     if (parentBlock && lastBlockElement && parentBlock !== lastBlockElement) {
@@ -130,7 +142,7 @@ export function tokenizeReaderDOM(containerElement, documentObject = document) {
         trailingNewlines = 2;
         trailingWhitespace = true;
       }
-    } else if (currentLen > 0 && !trailingWhitespace) {
+    } else if (currentLen > 0 && !trailingWhitespace && !/^\s/.test(text) && !/^[.,!?;:)\]}\u2019\u201D]/.test(text)) {
       textParts.push(' ');
       currentLen += 1;
       trailingWhitespace = true;

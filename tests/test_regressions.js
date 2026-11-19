@@ -155,28 +155,30 @@ const path = require('node:path');
   assert(sanitizedHtml.includes('&lt;script&gt;'), 'Script tag was not escaped');
   console.log('✓ Dangerous URL schemes and raw HTML injections cleanly neutralized.');
 
-  console.log('\n--- 11. Edit Mode: Raw text preservation and round trip ---');
-  const complexOriginalText = [
-    '# Title Line',
-    '',
-    'Paragraph 1 with **bold**.',
-    '',
-    '',
-    'Paragraph 2 after two blank lines.',
-    '',
-    '- List item 1',
-    '  - Indented item',
-    '',
-    '2 * 3 * 4 = 24'
-  ].join('\n');
+  console.log('\n--- 11. Markdown: Task lists, percent-encoded URLs, numeric entities, and anchor links ---');
+  const taskListMd = '- [x] Done task\n- [ ] Open task';
+  const taskListHtml = parser.parseMarkdownToHtml(taskListMd);
+  assert(taskListHtml.includes('<input checked="" disabled="" type="checkbox"> Done task'), `Checked task checkbox missing: ${taskListHtml}`);
+  assert(taskListHtml.includes('<input disabled="" type="checkbox"> Open task'), `Unchecked task checkbox missing: ${taskListHtml}`);
 
-  let sessionText = complexOriginalText;
-  const editedText = sessionText + '\n\nAdditional edited paragraph.';
-  sessionText = editedText;
-  assert.strictEqual(sessionText, complexOriginalText + '\n\nAdditional edited paragraph.');
-  assert(sessionText.includes('\n\n\nParagraph 2 after two blank lines.'), 'Blank lines must be preserved in raw text');
-  assert(sessionText.includes('- List item 1\n  - Indented item'), 'Indentation must be preserved in raw text');
-  console.log('✓ Edit mode round trip preserves blank lines and syntax.');
+  const encodedUrlMd = '[C++ Wiki](https://en.wikipedia.org/wiki/C%2B%2B) and [Space](https://example.com/a%20b?q=1%262)';
+  const encodedUrlHtml = parser.parseMarkdownToHtml(encodedUrlMd);
+  assert(encodedUrlHtml.includes('href="https://en.wikipedia.org/wiki/C%2B%2B"'), `Percent-encoded URL was double-encoded: ${encodedUrlHtml}`);
+  assert(encodedUrlHtml.includes('href="https://example.com/a%20b?q=1%262"'), `Query percent-encoding was corrupted: ${encodedUrlHtml}`);
+
+  const savedDoc = global.document;
+  delete global.document;
+  try {
+    const entityXssHtml = parser.parseMarkdownToHtml('[XSS](javascript&#58;alert(1)) and [Hex](javascript&#x3a;alert(1))');
+    assert(!entityXssHtml.includes('href="javascript:'), `Numeric entity XSS link was not blocked: ${entityXssHtml}`);
+  } finally {
+    if (savedDoc !== undefined) global.document = savedDoc;
+  }
+
+  const anchorHtml = parser.parseMarkdownToHtml('[Jump](#section-one)');
+  assert(anchorHtml.includes('<a href="#section-one">Jump</a>'), `In-page anchor link should not force target=_blank: ${anchorHtml}`);
+  assert(!anchorHtml.includes('target="_blank"'), `In-page anchor link must not open a new tab: ${anchorHtml}`);
+  console.log('✓ GFM task lists, percent-encoded URLs, numeric entity checks, and anchor links verified.');
 
   console.log('\n--- 12. Async State Races: Back during render invalidation ---');
   const mockContext = createAppContext({
@@ -997,6 +999,158 @@ const path = require('node:path');
   assert.strictEqual(tokResult.spans.length, 11, `Expected 11 word spans, got: ${tokResult.spans.length}`);
   assert(tokResult.spans.every(span => span.hasAttribute('data-word-idx')), 'All word spans must have data-word-idx');
   console.log('✓ Preserved inter-word and trailing whitespace in DOM textContent after tokenization.');
+
+  console.log('\n--- 41. Presets: Default text color avoids clobbering CSS theme colors ---');
+  [...constants.lightPresets, ...constants.darkPresets].forEach(preset => {
+    assert.strictEqual(preset.color, 'default', `Preset ${preset.name} must use default color so CSS theme --reader-text-color applies`);
+  });
+  console.log('✓ All light and dark presets preserve CSS theme text colors.');
+
+  console.log('\n--- 42. Carousel: Right-click and touchcancel do not stick drag loop ---');
+  const dragGuardListeners = {};
+  const dragGuardWindow = {
+    nodeType: 1,
+    addEventListener: (t, cb) => { dragGuardListeners[t] = cb; },
+    getAttribute: () => '',
+    setAttribute: () => {},
+    getBoundingClientRect: () => ({ width: 300 }),
+    closest: () => null
+  };
+  const dragGuardContext = createAppContext({
+    presetWindow: dragGuardWindow,
+    presetTrack: { classList: makeClassList2(), querySelectorAll: () => [], style: {} },
+    presetDots: { innerHTML: '', querySelectorAll: () => [] },
+    themeSettingsSummary: { textContent: '' },
+    modeLight: { classList: makeClassList2(), setAttribute() {}, addEventListener() {} },
+    modeDark: { classList: makeClassList2(), setAttribute() {}, addEventListener() {} },
+    readerContent: { style: { setProperty() {}, removeProperty() {} }, classList: makeClassList2(), addEventListener() {} }
+  });
+  const dragGuardSettings = createSettings(dragGuardContext, {
+    ui: mockUI,
+    onResetToolbarTimer: () => {},
+    isMobileSheetLayout: () => false
+  });
+  dragGuardSettings.bindEvents();
+  dragGuardListeners.mousedown({ button: 2, clientX: 150, target: dragGuardWindow });
+  assert.strictEqual(dragGuardContext.state.isDraggingCarousel, false, 'Right-click must not start carousel drag');
+  dragGuardListeners.touchstart({ touches: [{ clientX: 150 }], target: dragGuardWindow });
+  assert.strictEqual(dragGuardContext.state.isDraggingCarousel, true, 'Touch start should begin carousel drag');
+  dragGuardListeners.touchcancel();
+  assert.strictEqual(dragGuardContext.state.isDraggingCarousel, false, 'touchcancel must end carousel drag');
+  console.log('✓ Carousel drag ignores non-primary mouse buttons and cleans up on touchcancel.');
+
+  console.log('\n--- 43. TTS: Short desktop resume estimate timer, paused settings changes, and external cancel ---');
+  const ttsFixSpans = [
+    { classList: makeClassList2(), scrollIntoView() {}, getBoundingClientRect: () => ({ top: 100, bottom: 120 }) },
+    { classList: makeClassList2(), scrollIntoView() {}, getBoundingClientRect: () => ({ top: 100, bottom: 120 }) },
+    { classList: makeClassList2(), scrollIntoView() {}, getBoundingClientRect: () => ({ top: 100, bottom: 120 }) }
+  ];
+  let ttsFixUtterance = null;
+  const ttsFixSynth = {
+    speakCalls: 0,
+    cancelCalls: 0,
+    resumeCalls: 0,
+    speak(u) {
+      this.speakCalls += 1;
+      ttsFixUtterance = u;
+    },
+    pause() {},
+    resume() { this.resumeCalls += 1; },
+    cancel() { this.cancelCalls += 1; },
+    getVoices() { return []; }
+  };
+  const ttsFixRateInput = { value: '1.0', addEventListener() {} };
+  const ttsFixContext = createAppContext({
+    readerContent: { querySelectorAll: () => [], contains: () => true },
+    voiceRateInput: ttsFixRateInput,
+    voiceRateVal: { textContent: '1.0x' },
+    audioSpeedBtn: { textContent: '1.0x', addEventListener() {} }
+  });
+  ttsFixContext.runtime.tts.supported = true;
+  ttsFixContext.runtime.tts.isMobile = false;
+  ttsFixContext.runtime.tts.synth = ttsFixSynth;
+  ttsFixContext.runtime.tts.wordMeta = [
+    { index: 0, text: 'Alpha', start: 0, end: 5, element: ttsFixSpans[0] },
+    { index: 1, text: 'Beta', start: 6, end: 10, element: ttsFixSpans[1] },
+    { index: 2, text: 'Gamma', start: 11, end: 16, element: ttsFixSpans[2] }
+  ];
+  ttsFixContext.runtime.tts.wordSpans = ttsFixSpans;
+  ttsFixContext.runtime.tts.fullSpokenText = 'Alpha Beta Gamma';
+  const ttsFixController = tts.createTTS(ttsFixContext, { ui: mockUI });
+  ttsFixController.startSpeech(0);
+  assert(ttsFixUtterance, 'Initial utterance should be created');
+  ttsFixUtterance.onstart();
+  assert(ttsFixContext.runtime.tts.estimateTimer, 'Estimate timer should start when no boundary fired');
+  ttsFixController.pauseSpeech();
+  assert.strictEqual(ttsFixContext.runtime.tts.estimateTimer, null, 'Pause must clear estimate timer');
+  ttsFixController.resumeSpeech();
+  assert(ttsFixContext.runtime.tts.estimateTimer, 'Short desktop resume without boundary events must restart estimate timer');
+
+  ttsFixController.pauseSpeech();
+  const speaksBeforeSpeedChange = ttsFixSynth.speakCalls;
+  ttsFixController.cycleVoiceSpeed();
+  assert.strictEqual(ttsFixContext.runtime.tts.visibilityInterrupted, true, 'Speed change while paused must mark utterance dirty');
+  ttsFixController.resumeSpeech();
+  assert.strictEqual(ttsFixSynth.speakCalls, speaksBeforeSpeedChange + 1, 'Resuming after speed change while paused must restart utterance');
+
+  ttsFixContext.runtime.tts.chunks = [
+    { text: 'Chunk one.', start: 0, end: 10 },
+    { text: 'Chunk two.', start: 11, end: 21 }
+  ];
+  ttsFixContext.runtime.tts.chunkIndex = 0;
+  const speaksBeforeCancelError = ttsFixSynth.speakCalls;
+  ttsFixUtterance.onerror({ error: 'canceled' });
+  assert.strictEqual(ttsFixContext.runtime.tts.state, 'idle', 'External canceled error should stop playback cleanly');
+  assert.strictEqual(ttsFixSynth.speakCalls, speaksBeforeCancelError, 'External canceled error must not skip ahead to next chunk');
+  console.log('✓ TTS desktop resume estimate timer, paused setting updates, and external cancel behavior verified.');
+
+  console.log('\n--- 44. DOM Tokenization: Idempotency, table cell breaks, and trailing punctuation ---');
+  class RichMockNode extends MockDOMNode {
+    querySelectorAll(selector) {
+      const results = [];
+      const visit = node => {
+        if (node !== this && node.nodeType === 1 && selector === '.tts-word' && node.className && node.className.split(/\s+/).includes('tts-word')) {
+          results.push(node);
+        }
+        node.childNodes.forEach(visit);
+      };
+      visit(this);
+      return results;
+    }
+  }
+  const richDoc = {
+    createTextNode: text => new RichMockNode(3, text),
+    createElement: tag => new RichMockNode(1, null, tag.toUpperCase()),
+    createDocumentFragment: () => new RichMockNode(11),
+    createTreeWalker: tokDoc.createTreeWalker.bind(tokDoc)
+  };
+  const richContainer = richDoc.createElement('div');
+  const pWithPunct = richDoc.createElement('p');
+  const boldWord = richDoc.createElement('strong');
+  boldWord.appendChild(richDoc.createTextNode('bold'));
+  pWithPunct.appendChild(boldWord);
+  pWithPunct.appendChild(richDoc.createTextNode('.'));
+  richContainer.appendChild(pWithPunct);
+
+  const tbl = richDoc.createElement('table');
+  const row = richDoc.createElement('tr');
+  const th = richDoc.createElement('th');
+  th.appendChild(richDoc.createTextNode('Header'));
+  const td = richDoc.createElement('td');
+  td.appendChild(richDoc.createTextNode('Value'));
+  row.appendChild(th);
+  row.appendChild(td);
+  tbl.appendChild(row);
+  richContainer.appendChild(tbl);
+
+  const firstPass = tts.tokenizeReaderDOM(richContainer, richDoc);
+  assert(firstPass.text.includes('bold.'), `Trailing punctuation after inline element must not gain an extra space: ${JSON.stringify(firstPass.text)}`);
+  assert(firstPass.text.includes('Header\n\nValue'), `Table cells must have block pauses: ${JSON.stringify(firstPass.text)}`);
+
+  const secondPass = tts.tokenizeReaderDOM(richContainer, richDoc);
+  assert.strictEqual(secondPass.spans.length, firstPass.spans.length, 'Re-running tokenizeReaderDOM must be idempotent');
+  assert.strictEqual(secondPass.text, firstPass.text, 'Re-running tokenizeReaderDOM must preserve exact spoken text');
+  console.log('✓ DOM tokenization idempotency, table cell breaks, and trailing punctuation verified.');
 
   console.log('\n====================================================');
   console.log('ALL REGRESSION TESTS PASSED SUCCESSFULLY');

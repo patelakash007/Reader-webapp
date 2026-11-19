@@ -99,11 +99,12 @@ export function createReaderNavigation(context, { ui, getSettings, resetToolbarT
         els.mobileFab.setAttribute('aria-label', 'Open Reading Settings');
         els.mobileFab.setAttribute('aria-expanded', 'false');
       }
-  const targetFocus = (runtime.reader.lastActiveElement && typeof document !== 'undefined' && document.contains(runtime.reader.lastActiveElement))
+      const targetFocus = (runtime.reader.lastActiveElement && typeof document !== 'undefined' && document.contains(runtime.reader.lastActiveElement))
         ? runtime.reader.lastActiveElement
         : els.mobileFab;
       try { targetFocus.focus(); } catch (err) {}
     }
+    runtime.reader.lastActiveElement = null;
     const settings = getSettings();
     if (settings) settings.resetSettingsSections();
   }

@@ -178,7 +178,12 @@ export function createSettings(context, { ui: _ui, onResetToolbarTimer, isMobile
   function updateMarginStyle(value) {
     if (!els.readerContent) return;
     let padding = clampNumber(value, 24, 12, 80);
-    if (typeof window !== 'undefined' && window.innerWidth <= 640) padding = Math.min(padding, 24);
+    if (typeof window !== 'undefined' && window.innerWidth <= 640) {
+      const mobileMax = Number.isFinite(window.innerWidth) && window.innerWidth > 0
+        ? Math.max(24, Math.floor(window.innerWidth * 0.14))
+        : 48;
+      padding = Math.min(padding, mobileMax);
+    }
     els.readerContent.style.paddingLeft = `${padding}px`;
     els.readerContent.style.paddingRight = `${padding}px`;
   }
@@ -208,8 +213,11 @@ export function createSettings(context, { ui: _ui, onResetToolbarTimer, isMobile
         if (state.isDraggingCarousel) state.dragCurrentX = event.touches[0].clientX;
       }, { passive: true });
       els.presetWindow.addEventListener('touchend', endCarouselDrag, { passive: true });
+      els.presetWindow.addEventListener('touchcancel', endCarouselDrag, { passive: true });
       els.presetWindow.addEventListener('mousedown', event => {
-        if (canStartCarouselDrag(event.target)) startCarouselDrag(event.clientX);
+        if ((event.button === undefined || event.button === 0) && canStartCarouselDrag(event.target)) {
+          startCarouselDrag(event.clientX);
+        }
       });
       els.presetWindow.addEventListener('click', event => {
         if (hasSelectedText() || state.isDraggingCarousel) return;
@@ -235,10 +243,12 @@ export function createSettings(context, { ui: _ui, onResetToolbarTimer, isMobile
         }
       });
     }
-    window.addEventListener('mousemove', event => {
-      if (state.isDraggingCarousel) state.dragCurrentX = event.clientX;
-    });
-    window.addEventListener('mouseup', endCarouselDrag);
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('mousemove', event => {
+        if (state.isDraggingCarousel) state.dragCurrentX = event.clientX;
+      });
+      window.addEventListener('mouseup', endCarouselDrag);
+    }
     if (els.readerView) attachGestureArea(els.readerView);
     else if (els.readerContent) attachGestureArea(els.readerContent);
     if (els.lineHeightInput) els.lineHeightInput.addEventListener('input', () => setLineHeight(els.lineHeightInput.value));

@@ -15,14 +15,6 @@ export function createReaderRenderer(context, { ui, tts, applyTextColor }) {
 
     const renderer = createMarkdownRenderer(state.smartHeadings);
     let tokens = [];
-    try {
-      tokens = renderer.tokenize(text);
-    } catch (err) {
-      if (renderId !== runtime.reader.activeRenderId) return;
-      if (shouldShowLoader) ui.hideLoader();
-      ui.showStatus(`Could not render this text safely: ${err && err.message ? err.message : 'Unknown error'}`, 'error');
-      return;
-    }
     let index = 0;
 
     const processChunk = () => {
@@ -59,10 +51,13 @@ export function createReaderRenderer(context, { ui, tts, applyTextColor }) {
         if (renderId !== runtime.reader.activeRenderId) return;
         applyTextColor();
         if (tts && typeof tts.tokenize === 'function') {
-          try {
-            tts.tokenize();
-          } catch (err) {
-            // Guard against tokenization errors preventing document display
+          const session = typeof tts.getSession === 'function' ? tts.getSession() : null;
+          if (!session || session.supported !== false) {
+            try {
+              tts.tokenize();
+            } catch (err) {
+              // Guard against tokenization errors preventing document display
+            }
           }
         } else if (tts && typeof tts.invalidateTokenization === 'function') {
           tts.invalidateTokenization();
@@ -76,13 +71,23 @@ export function createReaderRenderer(context, { ui, tts, applyTextColor }) {
       }
     };
 
-    if (typeof setTimeout !== 'undefined') {
-      setTimeout(() => {
+    const startRender = () => {
+      if (renderId !== runtime.reader.activeRenderId) return;
+      try {
+        tokens = renderer.tokenize(text);
+      } catch (err) {
         if (renderId !== runtime.reader.activeRenderId) return;
-        processChunk();
-      }, 10);
-    } else {
+        if (shouldShowLoader) ui.hideLoader();
+        ui.showStatus(`Could not render this text safely: ${err && err.message ? err.message : 'Unknown error'}`, 'error');
+        return;
+      }
       processChunk();
+    };
+
+    if (typeof setTimeout !== 'undefined') {
+      setTimeout(startRender, 10);
+    } else {
+      startRender();
     }
   }
 

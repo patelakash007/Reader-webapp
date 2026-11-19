@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { pathToFileURL } = require('node:url');
 
 const rootDir = path.resolve(__dirname, '..');
 
@@ -23,7 +24,8 @@ const allFiles = [...rootFiles, ...srcFiles, ...scriptFiles, ...testFiles];
 
 // 1. JavaScript syntax validation on all files
 for (const filePath of allFiles) {
-  const result = spawnSync(process.execPath, ['--check', filePath], { encoding: 'utf8' });
+  const checkArgs = process.versions && process.versions.deno ? ['cache', filePath] : ['--check', filePath];
+  const result = spawnSync(process.execPath, checkArgs, { encoding: 'utf8' });
   if (result.status !== 0) {
     process.stderr.write(result.stderr || `Syntax check failed for ${filePath}.\n`);
     process.exit(result.status || 1);
@@ -45,7 +47,7 @@ for (const filePath of allFiles) {
         process.exit(1);
       }
       try {
-        const mod = await import(targetPath);
+        const mod = await import(pathToFileURL(targetPath).href);
         for (const name of importedNames) {
           if (!(name in mod)) {
             console.error(`Missing export '${name}' from ${relativeModule} imported by ${filePath}`);

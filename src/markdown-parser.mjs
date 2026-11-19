@@ -3,14 +3,24 @@ import { Marked } from '../vendor/marked.esm.mjs';
 
 function decodeHtmlAttributeValue(value) {
   if (typeof document === 'undefined') {
-    return String(value).replace(/&(?:amp|lt|gt|quot|#039|#x27);/gi, entity => ({
-      '&amp;': '&',
-      '&lt;': '<',
-      '&gt;': '>',
-      '&quot;': '"',
-      '&#039;': "'",
-      '&#x27;': "'"
-    }[entity.toLowerCase()] || entity));
+    return String(value)
+      .replace(/&#(\d+);/g, (match, dec) => {
+        const code = Number.parseInt(dec, 10);
+        return Number.isFinite(code) && code >= 0 && code <= 0x10FFFF ? String.fromCodePoint(code) : match;
+      })
+      .replace(/&#x([0-9a-f]+);/gi, (match, hex) => {
+        const code = Number.parseInt(hex, 16);
+        return Number.isFinite(code) && code >= 0 && code <= 0x10FFFF ? String.fromCodePoint(code) : match;
+      })
+      .replace(/&(?:amp|lt|gt|quot|apos|#039|#x27);/gi, entity => ({
+        '&amp;': '&',
+        '&lt;': '<',
+        '&gt;': '>',
+        '&quot;': '"',
+        '&apos;': "'",
+        '&#039;': "'",
+        '&#x27;': "'"
+      }[entity.toLowerCase()] || entity));
   }
   const decoder = document.createElement('textarea');
   decoder.innerHTML = value;
@@ -30,7 +40,7 @@ export function normalizeSafeLinkHref(escapedUrl) {
   if (!isSafe) return null;
 
   try {
-    return escapeHtml(encodeURI(cleanUrl));
+    return escapeHtml(encodeURI(cleanUrl).replace(/%25([0-9A-Fa-f]{2})/g, '%$1'));
   } catch (err) {
     return null;
   }
@@ -62,6 +72,9 @@ export function createMarkedInstance() {
         const safeHref = normalizeSafeLinkHref(token.href);
         const text = this.parser.parseInline(token.tokens);
         if (!safeHref) return text;
+        if (safeHref.startsWith('#')) {
+          return `<a href="${safeHref}">${text}</a>`;
+        }
         return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${text}</a>`;
       },
       image(token) {
@@ -82,7 +95,15 @@ export function createMarkedInstance() {
         return `<${tag}${startAttr}>${body}</${tag}>\n`;
       },
       listitem(item) {
-        return `<li>${this.parser.parse(item.tokens, !!item.loose)}</li>`;
+        const parsed = this.parser.parse(item.tokens, !!item.loose);
+        if (!item.task) {
+          return `<li>${parsed}</li>`;
+        }
+        const checkbox = `<input ${item.checked ? 'checked="" ' : ''}disabled="" type="checkbox"> `;
+        const body = item.loose && parsed.startsWith('<p>')
+          ? `<p>${checkbox}${parsed.slice(3)}`
+          : `${checkbox}${parsed}`;
+        return `<li>${body}</li>`;
       }
     }
   });

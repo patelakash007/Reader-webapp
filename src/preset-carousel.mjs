@@ -3,6 +3,7 @@ import { clampIndex, escapeHtml, getElementTarget, isMobileDevice } from './util
 
 export function createPresetCarousel(context, { getPresets, applyPreset, setMode }) {
   const { els, state } = context;
+  let carouselRafId = null;
 
   function setTrackPosition(index, animate) {
     if (!els.presetTrack) return;
@@ -107,13 +108,16 @@ export function createPresetCarousel(context, { getPresets, applyPreset, setMode
   }
 
   function updateCarouselDrag() {
+    carouselRafId = null;
     if (!state.isDraggingCarousel || !els.presetTrack) return;
     let distance = state.dragCurrentX - state.dragStartX;
     const list = getPresets();
     if ((state.dragStartIndex === 0 && distance > 0) || (state.dragStartIndex === list.length - 1 && distance < 0)) distance *= 0.35;
     const percentage = (distance / state.carouselWidth) * 100;
     els.presetTrack.style.transform = `translate3d(${(-state.dragStartIndex * 100) + percentage}%, 0, 0)`;
-    window.requestAnimationFrame(updateCarouselDrag);
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      carouselRafId = window.requestAnimationFrame(updateCarouselDrag);
+    }
   }
 
   function startCarouselDrag(x) {
@@ -126,10 +130,20 @@ export function createPresetCarousel(context, { getPresets, applyPreset, setMode
     state.lastCarouselDragDistance = 0;
     els.presetTrack.classList.remove('snapping');
     els.presetTrack.classList.add('dragging');
-    window.requestAnimationFrame(updateCarouselDrag);
+    if (carouselRafId !== null && typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+      window.cancelAnimationFrame(carouselRafId);
+      carouselRafId = null;
+    }
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      carouselRafId = window.requestAnimationFrame(updateCarouselDrag);
+    }
   }
 
   function endCarouselDrag() {
+    if (carouselRafId !== null && typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+      window.cancelAnimationFrame(carouselRafId);
+      carouselRafId = null;
+    }
     if (!state.isDraggingCarousel) return;
     state.isDraggingCarousel = false;
     const distance = state.dragCurrentX - state.dragStartX;
@@ -150,7 +164,7 @@ export function createPresetCarousel(context, { getPresets, applyPreset, setMode
     const element = getElementTarget(target);
     if (!element) return false;
     return Boolean(element.closest([
-      'a', 'button', 'input', 'select', 'textarea', 'label', 'pre', 'code', '[contenteditable]',
+      'a', 'button', 'input', 'select', 'textarea', 'label', 'pre', 'code', 'table', '[contenteditable]',
       '[role="button"]', '[role="link"]', '[role="slider"]', '[role="textbox"]', '[role="combobox"]',
       '[role="checkbox"]', '[role="radio"]', '#toolbar', '.audio-player-bar', '#backBtn'
     ].join(',')));
@@ -214,6 +228,7 @@ export function createPresetCarousel(context, { getPresets, applyPreset, setMode
     }, { passive: true });
     if (isMobileDevice()) {
       element.addEventListener('mousedown', event => {
+        if (event.button !== undefined && event.button !== 0) return;
         if (!canStartPresetGesture(event.target)) {
           state.isGesture = false;
           return;

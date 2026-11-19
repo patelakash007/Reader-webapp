@@ -39,27 +39,27 @@ export const fontMap = {
 export const lightPresets = [
   { name: 'Claude', font: 'sans', theme: 'claude', color: 'default', desc: 'Clean warm system sans' },
   { name: 'Zen', font: 'sans', theme: 'zen', color: 'default', desc: 'Pure minimal white' },
-  { name: 'Stark', font: 'sans', theme: 'stark', color: 'high', desc: 'Bold high contrast' },
-  { name: 'Book', font: 'serif', theme: 'paper', color: 'warm', desc: 'Long-form book reading' },
+  { name: 'Stark', font: 'sans', theme: 'stark', color: 'default', desc: 'Bold high contrast' },
+  { name: 'Book', font: 'serif', theme: 'paper', color: 'default', desc: 'Long-form book reading' },
   { name: 'Classic', font: 'serif', theme: 'cream', color: 'default', desc: 'Traditional print feel' },
-  { name: 'Kindle', font: 'serif', theme: 'kindle', color: 'warm', desc: 'E-ink sepia warmth' },
+  { name: 'Kindle', font: 'serif', theme: 'kindle', color: 'default', desc: 'E-ink sepia warmth' },
   { name: 'GitHub', font: 'mono', theme: 'github', color: 'default', desc: 'Developer monospace' },
-  { name: 'Amber', font: 'sans', theme: 'amber', color: 'high', desc: 'High contrast warm' },
+  { name: 'Amber', font: 'sans', theme: 'amber', color: 'default', desc: 'High contrast warm' },
   { name: 'Newspaper', font: 'serif', theme: 'newspaper', color: 'default', desc: 'Old school print' },
   { name: 'Lavender', font: 'sans', theme: 'lavender', color: 'default', desc: 'Soft purple calm' }
 ];
 
 export const darkPresets = [
-  { name: 'Night', font: 'sans', theme: 'dark', color: 'soft', desc: 'Deep black OLED' },
-  { name: 'Void', font: 'sans', theme: 'void', color: 'soft', desc: 'Pure black void' },
-  { name: 'Carbon', font: 'sans', theme: 'carbon', color: 'soft', desc: 'Material dark grey' },
-  { name: 'Midnight', font: 'serif', theme: 'midnight', color: 'soft', desc: 'Purple dark elegance' },
-  { name: 'Obsidian', font: 'sans', theme: 'obsidian', color: 'soft', desc: 'Note app dark' },
-  { name: 'Dracula', font: 'mono', theme: 'dracula', color: 'soft', desc: 'Famous code dark' },
-  { name: 'Nord', font: 'sans', theme: 'nord', color: 'soft', desc: 'Arctic blue dark' },
-  { name: 'Catppuccin', font: 'sans', theme: 'catppuccin', color: 'soft', desc: 'Pastel dark cozy' },
-  { name: 'Forest', font: 'sans', theme: 'forest', color: 'soft', desc: 'Green night easy' },
-  { name: 'Ink', font: 'serif', theme: 'ink', color: 'soft', desc: 'Navy scholarly' }
+  { name: 'Night', font: 'sans', theme: 'dark', color: 'default', desc: 'Deep black OLED' },
+  { name: 'Void', font: 'sans', theme: 'void', color: 'default', desc: 'Pure black void' },
+  { name: 'Carbon', font: 'sans', theme: 'carbon', color: 'default', desc: 'Material dark grey' },
+  { name: 'Midnight', font: 'serif', theme: 'midnight', color: 'default', desc: 'Purple dark elegance' },
+  { name: 'Obsidian', font: 'sans', theme: 'obsidian', color: 'default', desc: 'Note app dark' },
+  { name: 'Dracula', font: 'mono', theme: 'dracula', color: 'default', desc: 'Famous code dark' },
+  { name: 'Nord', font: 'sans', theme: 'nord', color: 'default', desc: 'Arctic blue dark' },
+  { name: 'Catppuccin', font: 'sans', theme: 'catppuccin', color: 'default', desc: 'Pastel dark cozy' },
+  { name: 'Forest', font: 'sans', theme: 'forest', color: 'default', desc: 'Green night easy' },
+  { name: 'Ink', font: 'serif', theme: 'ink', color: 'default', desc: 'Navy scholarly' }
 ];
 
 export const textColorMap = {

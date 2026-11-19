@@ -2,9 +2,9 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const {
-  browserEnvVars,
   ensureOutputDir,
   findBrowserExecutable,
+  launchChromiumWithFallback,
   outputDir,
   rootDir,
   startStaticServer,
@@ -92,7 +92,8 @@ async function runDeepPlaywrightChecks() {
     throw new Error('Deep Playwright checks require playwright-core or playwright.');
   }
 
-  const browserExecutable = findBrowserExecutable();
+  const detectedExecutable = findBrowserExecutable();
+  let browserExecutable = detectedExecutable;
   const localServer = await startStaticServer();
   const url = localServer.url;
   const screenshots = [];
@@ -104,15 +105,9 @@ async function runDeepPlaywrightChecks() {
     const malformedStatus = await getHttpStatus(`${url}%E0%A4%A`);
     assert(malformedStatus === 400, `Malformed local-server path returned ${malformedStatus}, expected 400.`);
 
-    const launchOptions = { headless: true };
-    if (browserExecutable) {
-      launchOptions.executablePath = browserExecutable.path;
-    } else if (playwright.packageName === 'playwright-core') {
-      console.warn('No browser executable was detected for deep checks.');
-      console.warn(`Set one of these env vars to force a Chromium-compatible executable: ${browserEnvVars.join(', ')}`);
-    }
-
-    browser = await playwright.module.chromium.launch(launchOptions);
+    const launched = await launchChromiumWithFallback(playwright, detectedExecutable);
+    browser = launched.browser;
+    browserExecutable = launched.browserExecutable;
     const context = await browser.newContext({
       viewport: { width: 1365, height: 900 },
       acceptDownloads: true

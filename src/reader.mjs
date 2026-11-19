@@ -83,7 +83,9 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
     if (tts && typeof tts.invalidateTokenization === 'function') {
       tts.invalidateTokenization();
     }
-    collapseMobileSheet();
+    if (els.toolbar && els.toolbar.classList.contains('expanded')) {
+      collapseMobileSheet();
+    }
     ui.hideLoader();
     if (els.readerView) els.readerView.classList.remove('active');
     if (els.inputView) els.inputView.classList.remove('hidden');
@@ -111,6 +113,9 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
     }
     toggleClearBtn();
     if (els.progressBar) els.progressBar.style.width = '0%';
+    if (els.pasteArea && typeof els.pasteArea.focus === 'function') {
+      try { els.pasteArea.focus(); } catch (err) {}
+    }
   }
 
   function loadTextFlow(text) {
@@ -237,8 +242,24 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
       document.addEventListener('scroll', () => {
         if (els.readerView && els.readerView.classList.contains('active') && els.toolbar && els.toolbar.contains(document.activeElement)) resetToolbarTimer();
       }, { passive: true });
+      document.addEventListener('mousemove', event => {
+        if (
+          els.readerView &&
+          els.readerView.classList.contains('active') &&
+          els.toolbar &&
+          els.toolbar.classList.contains('hidden-bar') &&
+          !isMobileSheetLayout() &&
+          typeof event.clientY === 'number' &&
+          event.clientY <= 80
+        ) {
+          resetToolbarTimer();
+        }
+      }, { passive: true });
       document.addEventListener('keydown', event => {
         if (!els.readerView || !els.readerView.classList.contains('active')) return;
+        if (event.key === 'Tab' && els.toolbar && els.toolbar.classList.contains('hidden-bar') && !isMobileSheetLayout()) {
+          resetToolbarTimer();
+        }
         if (event.key === 'Escape') {
           if (els.toolbar && els.toolbar.classList.contains('expanded')) {
             collapseMobileSheet();

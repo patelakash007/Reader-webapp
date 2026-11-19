@@ -49,7 +49,6 @@ function getRequestUrl(request) {
   if (withoutSearch.href === INDEX_URL) {
     return INDEX_URL;
   }
-  if (url.href === ROOT_URL_WITHOUT_TRAILING_SLASH) return ROOT_URL;
   return url.href;
 }
 
@@ -91,7 +90,7 @@ async function cacheCanonicalNavigation(cache, request, response) {
   await Promise.all(cacheWrites);
 }
 
-async function navigationResponse(request, event) {
+async function navigationResponse(request) {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin || !url.href.startsWith(self.registration.scope)) {
     return fetch(request);
@@ -119,26 +118,26 @@ async function navigationResponse(request, event) {
 
 async function staleWhileRevalidate(request, event) {
   const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
-  const fetchPromise = fetch(request, { cache: 'no-cache' });
-
-  event.waitUntil(fetchPromise
-    .then(response => {
+  const cacheKey = isCanonicalAppShellRequest(request) ? getRequestUrl(request) : request;
+  const cached = await cache.match(cacheKey);
+  const networkUpdate = fetch(request, { cache: 'no-cache' })
+    .then(async response => {
       if (response && response.ok) {
-        return safeCachePut(cache, request, response.clone());
+        await safeCachePut(cache, cacheKey, response.clone());
       }
-      return undefined;
-    })
-    .catch(() => undefined));
+      return response;
+    });
+
+  event.waitUntil(networkUpdate.catch(() => undefined));
 
   if (cached) return cached;
-  return fetchPromise;
+  return networkUpdate;
 }
 
 function isVendorRequest(request) {
   if (!isSameOriginGet(request)) return false;
   const url = new URL(request.url);
-  return url.pathname.includes('/vendor/');
+  return url.href.startsWith(self.registration.scope) && url.pathname.includes('/vendor/');
 }
 
 self.addEventListener('install', event => {
@@ -166,7 +165,7 @@ self.addEventListener('fetch', event => {
   if (request.mode === 'navigate') {
     const url = new URL(request.url);
     if (url.origin === self.location.origin && url.href.startsWith(self.registration.scope)) {
-      event.respondWith(navigationResponse(request, event));
+      event.respondWith(navigationResponse(request));
     }
     return;
   }

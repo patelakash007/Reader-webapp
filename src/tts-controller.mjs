@@ -66,6 +66,23 @@ export function createTTS(context, { ui }) {
     return best;
   }
 
+  function scrollSpanIntoView(span) {
+    if (!span) return;
+    const rect = typeof span.getBoundingClientRect === 'function' ? span.getBoundingClientRect() : null;
+    const viewportHeight = typeof window !== 'undefined'
+      ? (window.innerHeight || (typeof document !== 'undefined' && document.documentElement?.clientHeight) || 800)
+      : 800;
+    if (rect && rect.top >= 80 && rect.bottom <= (viewportHeight - 100)) return;
+    const rate = parseFloat(els.voiceRateInput ? els.voiceRateInput.value : '1.0') || 1.0;
+    const reducedMotion = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const scrollBehavior = (rate > 1.5 || reducedMotion) ? 'auto' : 'smooth';
+    try {
+      span.scrollIntoView({ block: 'nearest', behavior: scrollBehavior });
+    } catch (err) {
+      if (typeof span.scrollIntoView === 'function') span.scrollIntoView();
+    }
+  }
+
   function highlightAtIndex(absIndex) {
     if (!session.wordMeta.length) return;
 
@@ -82,16 +99,7 @@ export function createTTS(context, { ui }) {
           const nextSpan = session.wordSpans[curr + 1];
           if (nextSpan) {
             nextSpan.classList.add('active');
-            const rect = typeof nextSpan.getBoundingClientRect === 'function' ? nextSpan.getBoundingClientRect() : null;
-            const viewportHeight = typeof window !== 'undefined' ? (window.innerHeight || document.documentElement?.clientHeight || 800) : 800;
-            const needsScroll = !rect || rect.top < 80 || rect.bottom > (viewportHeight - 100);
-            if (needsScroll) {
-              const rate = parseFloat(els.voiceRateInput ? els.voiceRateInput.value : '1.0') || 1.0;
-              const scrollBehavior = rate > 1.5 ? 'auto' : 'smooth';
-              try { nextSpan.scrollIntoView({ block: 'nearest', behavior: scrollBehavior }); } catch (err) {
-                if (typeof nextSpan.scrollIntoView === 'function') nextSpan.scrollIntoView();
-              }
-            }
+            scrollSpanIntoView(nextSpan);
           }
           return;
         }
@@ -107,25 +115,7 @@ export function createTTS(context, { ui }) {
     const span = session.wordSpans[index];
     if (!span) return;
     span.classList.add('active');
-    const rect = typeof span.getBoundingClientRect === 'function' ? span.getBoundingClientRect() : null;
-    if (rect) {
-      const viewportHeight = typeof window !== 'undefined' ? (window.innerHeight || 800) : 800;
-      if (rect.top < 80 || rect.bottom > (viewportHeight - 100)) {
-        const rate = els.voiceRateInput ? (parseFloat(els.voiceRateInput.value) || 1.0) : 1.0;
-        const scrollBehavior = rate > 1.5 ? 'auto' : 'smooth';
-        try {
-          span.scrollIntoView({ block: 'nearest', behavior: scrollBehavior });
-        } catch (err) {
-          if (typeof span.scrollIntoView === 'function') span.scrollIntoView();
-        }
-      }
-    } else {
-      try {
-        span.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      } catch (err) {
-        if (typeof span.scrollIntoView === 'function') span.scrollIntoView();
-      }
-    }
+    scrollSpanIntoView(span);
   }
 
   function tokenize() {
@@ -162,7 +152,6 @@ export function createTTS(context, { ui }) {
       const option = document.createElement('option');
       option.value = voice.voiceURI || String(index);
       option.textContent = `${voice.name} (${voice.lang})${voice.default ? ' — default' : ''}`;
-      option.dataset.voiceIndex = String(index);
       els.voiceSelect.appendChild(option);
     });
     const userLanguage = (typeof navigator !== 'undefined' && navigator.language) || 'en-US';
@@ -204,9 +193,12 @@ export function createTTS(context, { ui }) {
     const rate = clampNumber(els.voiceRateInput ? els.voiceRateInput.value : '1.0', 1.0, 0.5, 2.5);
     const startingChunkIndex = session.chunkIndex;
     const firstWord = findFirstWordEndingAfter(chunk.start);
-    const firstWordIndex = firstWord === -1 ? session.wordMeta.length - 1 : firstWord;
+    const chunkFirstWordIndex = firstWord === -1 ? session.wordMeta.length - 1 : firstWord;
     const lastWordIdx = findWordIndexByChar(chunk.end - 1);
-    const lastWord = lastWordIdx >= firstWordIndex ? lastWordIdx : firstWordIndex;
+    const lastWord = lastWordIdx >= chunkFirstWordIndex ? lastWordIdx : chunkFirstWordIndex;
+    const firstWordIndex = (session.currentWordIndex >= chunkFirstWordIndex && session.currentWordIndex <= lastWord)
+      ? session.currentWordIndex
+      : chunkFirstWordIndex;
     let elapsed = 0;
     if (firstWordIndex >= 0 && firstWordIndex < session.wordMeta.length) highlightAtIndex(session.wordMeta[firstWordIndex].start);
 
@@ -292,7 +284,10 @@ export function createTTS(context, { ui }) {
     const utterance = new SpeechSynthesisUtterance(chunk.text);
     const voice = getSelectedVoice();
     if (voice) {
-      try { utterance.voice = voice; } catch (err) {}
+      try {
+        utterance.voice = voice;
+        if (voice.lang) utterance.lang = voice.lang;
+      } catch (err) {}
     }
     utterance.rate = clampNumber(els.voiceRateInput ? els.voiceRateInput.value : '1.0', 1.0, 0.5, 2.5);
     utterance.pitch = 1;
@@ -322,10 +317,7 @@ export function createTTS(context, { ui }) {
       if (generation !== session.speechGeneration || session.finishing) return;
       if (event.error === 'interrupted' || event.error === 'canceled') {
         stopEstimateTimer();
-        if (session.state === STATE_PLAYING && session.chunkIndex < session.chunks.length - 1) {
-          session.chunkIndex += 1;
-          speakChunk(session.chunks[session.chunkIndex], generation);
-        } else if (session.state === STATE_PLAYING) finishSpeech();
+        if (session.state === STATE_PLAYING) finishSpeech();
         return;
       }
       if (event.error === 'not-allowed' || session.state !== STATE_IDLE) {
@@ -403,6 +395,9 @@ export function createTTS(context, { ui }) {
       try { session.synth.resume(); } catch (err) {}
       setState(STATE_PLAYING);
       startKeepAliveTimer();
+      if (!session.chunkHasBoundary && session.chunks[session.chunkIndex]) {
+        startEstimateTimer(session.chunks[session.chunkIndex], session.speechGeneration);
+      }
     }
     ui.announceLive('Text-to-speech resumed.');
   }
@@ -452,12 +447,14 @@ export function createTTS(context, { ui }) {
     if (els.audioSpeedBtn) els.audioSpeedBtn.textContent = `${nextSpeed.toFixed(1)}x`;
     ui.announceLive(`Speech speed changed to ${nextSpeed.toFixed(1)}x.`);
     if (session.state === STATE_PLAYING) restartFromWord(session.currentWordIndex >= 0 ? session.currentWordIndex : 0);
+    else if (session.state === STATE_PAUSED) session.visibilityInterrupted = true;
   }
 
   function handlePageHide() {
     if (session.pageHideTimer) clearTimeout(session.pageHideTimer);
     if (session.state === STATE_PLAYING) {
       session.visibilityInterrupted = true;
+      stopEstimateTimer();
       stopKeepAliveTimer();
       if (session.isMobile) {
         session.speechGeneration += 1;
@@ -484,6 +481,7 @@ export function createTTS(context, { ui }) {
     if (typeof document !== 'undefined' && document.hidden) {
       if (session.state === STATE_PLAYING) {
         session.visibilityInterrupted = true;
+        stopEstimateTimer();
         stopKeepAliveTimer();
         if (session.isMobile) {
           session.speechGeneration += 1;
@@ -507,6 +505,7 @@ export function createTTS(context, { ui }) {
     if (els.voiceSelect) {
       els.voiceSelect.addEventListener('change', () => {
         if (session.state === STATE_PLAYING) restartFromWord(session.currentWordIndex >= 0 ? session.currentWordIndex : 0);
+        else if (session.state === STATE_PAUSED) session.visibilityInterrupted = true;
       });
     }
     if (els.voiceRateInput && els.voiceRateVal) {
@@ -520,6 +519,7 @@ export function createTTS(context, { ui }) {
         const value = clampNumber(els.voiceRateInput.value, 1.0, 0.5, 2.5);
         ui.announceLive(`Speech speed changed to ${value.toFixed(1)}x.`);
         if (session.state === STATE_PLAYING) restartFromWord(session.currentWordIndex >= 0 ? session.currentWordIndex : 0);
+        else if (session.state === STATE_PAUSED) session.visibilityInterrupted = true;
       });
     }
     if (session.supported && session.synth) {

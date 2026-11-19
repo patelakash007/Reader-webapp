@@ -1,9 +1,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {
-  browserEnvVars,
   ensureOutputDir,
   findBrowserExecutable,
+  launchChromiumWithFallback,
   outputDir,
   rootDir,
   startStaticServer,
@@ -34,7 +34,8 @@ async function runPlaywrightSmoke() {
     return;
   }
 
-  const browserExecutable = findBrowserExecutable();
+  const detectedExecutable = findBrowserExecutable();
+  let browserExecutable = detectedExecutable;
   const localServer = await startStaticServer();
   const url = localServer.url;
   const consoleErrors = [];
@@ -46,18 +47,9 @@ async function runPlaywrightSmoke() {
     if (localServer.reusedExistingServer) {
       console.log(`Reusing existing local server at ${url}`);
     }
-    const launchOptions = {
-      headless: true
-    };
-
-    if (browserExecutable) {
-      launchOptions.executablePath = browserExecutable.path;
-    } else if (playwright.packageName === 'playwright-core') {
-      console.warn('Playwright is available, but no browser executable was detected.');
-      console.warn(`Set one of these env vars to force a Chromium-compatible executable: ${browserEnvVars.join(', ')}`);
-    }
-
-    browser = await playwright.module.chromium.launch(launchOptions);
+    const launched = await launchChromiumWithFallback(playwright, detectedExecutable);
+    browser = launched.browser;
+    browserExecutable = launched.browserExecutable;
     const context = await browser.newContext({
       viewport: { width: 1280, height: 900 }
     });
