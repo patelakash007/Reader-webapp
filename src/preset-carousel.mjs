@@ -150,8 +150,19 @@ export function createPresetCarousel(context, { getPresets, applyPreset, setMode
     state.lastCarouselDragDistance = Math.abs(distance);
     const threshold = state.carouselWidth * 0.18;
     const list = getPresets();
-    if (distance < -threshold && state.currentPresetIndex < list.length - 1) state.currentPresetIndex += 1;
-    else if (distance > threshold && state.currentPresetIndex > 0) state.currentPresetIndex -= 1;
+    if (distance < -threshold) {
+      if (state.currentPresetIndex >= list.length - 1 && typeof setMode === 'function') {
+        nextPreset();
+        return;
+      }
+      if (state.currentPresetIndex < list.length - 1) state.currentPresetIndex += 1;
+    } else if (distance > threshold) {
+      if (state.currentPresetIndex <= 0 && typeof setMode === 'function') {
+        prevPreset();
+        return;
+      }
+      if (state.currentPresetIndex > 0) state.currentPresetIndex -= 1;
+    }
     applyPreset(state.currentPresetIndex);
   }
 

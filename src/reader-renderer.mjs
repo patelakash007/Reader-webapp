@@ -1,6 +1,7 @@
 import { createMarkdownRenderer } from './parser.mjs';
+import { formatError } from './utils.mjs';
 
-export function createReaderRenderer(context, { ui, tts, applyTextColor }) {
+export function createReaderRenderer(context, { ui, tts }) {
   const { els, state, runtime } = context;
 
   function renderTextAsync(text, onComplete, options = {}) {
@@ -23,7 +24,12 @@ export function createReaderRenderer(context, { ui, tts, applyTextColor }) {
         const deadline = (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) + 12;
         let charsCount = 0;
         const startIndex = index;
-        while (index < tokens.length && (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) < deadline && charsCount < 30000) {
+        while (
+          index < tokens.length &&
+          (index === startIndex ||
+            ((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) < deadline &&
+              charsCount < 30000))
+        ) {
           if (renderId !== runtime.reader.activeRenderId) return;
           const token = tokens[index];
           charsCount += (token.raw ? token.raw.length : (token.text ? token.text.length : 0));
@@ -49,25 +55,12 @@ export function createReaderRenderer(context, { ui, tts, applyTextColor }) {
           return;
         }
         if (renderId !== runtime.reader.activeRenderId) return;
-        applyTextColor();
-        if (tts && typeof tts.tokenize === 'function') {
-          const session = typeof tts.getSession === 'function' ? tts.getSession() : null;
-          if (!session || session.supported !== false) {
-            try {
-              tts.tokenize();
-            } catch (err) {
-              // Guard against tokenization errors preventing document display
-            }
-          }
-        } else if (tts && typeof tts.invalidateTokenization === 'function') {
-          tts.invalidateTokenization();
-        }
         if (shouldShowLoader) ui.hideLoader();
         if (onComplete && renderId === runtime.reader.activeRenderId) onComplete();
       } catch (err) {
         if (renderId !== runtime.reader.activeRenderId) return;
         if (shouldShowLoader) ui.hideLoader();
-        ui.showStatus(`Could not render this text safely: ${err && err.message ? err.message : 'Unknown error'}`, 'error');
+        ui.showStatus(`Could not render this text safely: ${formatError(err)}`, 'error');
       }
     };
 
@@ -78,7 +71,7 @@ export function createReaderRenderer(context, { ui, tts, applyTextColor }) {
       } catch (err) {
         if (renderId !== runtime.reader.activeRenderId) return;
         if (shouldShowLoader) ui.hideLoader();
-        ui.showStatus(`Could not render this text safely: ${err && err.message ? err.message : 'Unknown error'}`, 'error');
+        ui.showStatus(`Could not render this text safely: ${formatError(err)}`, 'error');
         return;
       }
       processChunk();

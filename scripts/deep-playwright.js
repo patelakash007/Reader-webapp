@@ -316,31 +316,38 @@ async function runDeepPlaywrightChecks() {
     await page.locator('#voiceRateInput').fill('1.5');
     await page.locator('#voiceRateInput').dispatchEvent('input');
     await page.locator('#voiceRateInput').dispatchEvent('change');
-    const ttsControls = await page.evaluate(() => {
-      const rateVal = document.querySelector('#voiceRateVal')?.textContent;
-      const speedBtn = document.querySelector('#audioSpeedBtn')?.textContent;
-      const wordSpans = document.querySelectorAll('#readerContent .tts-word');
-      return {
-        rateVal,
-        speedBtn,
-        wordCount: wordSpans.length,
-        hasWordIndices: Array.from(wordSpans).every(span => span.hasAttribute('data-word-idx')),
-        listenExpanded: document.querySelector('[data-settings-section="listen"] .settings-section-toggle')?.getAttribute('aria-expanded')
-      };
-    });
-    assert(ttsControls.rateVal === '1.5x', `Voice rate label did not update: ${ttsControls.rateVal}`);
-    assert(ttsControls.speedBtn === '1.5x', `Audio bar speed button did not update: ${ttsControls.speedBtn}`);
-    assert(ttsControls.wordCount > 0, 'No .tts-word spans found in reader content');
-    assert(ttsControls.hasWordIndices, 'Word spans are missing data-word-idx attributes');
-    assert(ttsControls.listenExpanded === 'true', 'Listen section did not expand');
+    const ttsPreStart = await page.evaluate(() => ({
+      rateVal: document.querySelector('#voiceRateVal')?.textContent,
+      speedBtn: document.querySelector('#audioSpeedBtn')?.textContent,
+      wordCount: document.querySelectorAll('#readerContent .tts-word').length,
+      listenExpanded: document.querySelector('[data-settings-section="listen"] .settings-section-toggle')?.getAttribute('aria-expanded'),
+      audioBarHidden: document.querySelector('#audioPlayerBar')?.getAttribute('aria-hidden')
+    }));
+    assert(ttsPreStart.rateVal === '1.5x', `Voice rate label did not update: ${ttsPreStart.rateVal}`);
+    assert(ttsPreStart.speedBtn === '1.5x', `Audio bar speed button did not update: ${ttsPreStart.speedBtn}`);
+    assert(ttsPreStart.wordCount === 0, 'Reader DOM should tokenize lazily rather than eagerly before TTS starts');
+    assert(ttsPreStart.listenExpanded === 'true', 'Listen section did not expand');
+    assert(ttsPreStart.audioBarHidden === 'true', 'Inactive audio player bar should be aria-hidden');
 
-    // Test TTS Play / Pause / Resume / Stop cycle
+    // Test TTS Play / Pause / Resume / Stop cycle and lazy word tokenization
     await page.click('#ttsBtn');
     await page.waitForFunction(() => {
       const ttsBtn = document.querySelector('#ttsBtn');
       const playerBar = document.querySelector('#audioPlayerBar');
-      return ttsBtn && ttsBtn.classList.contains('active') && playerBar && playerBar.classList.contains('active');
+      const wordSpans = document.querySelectorAll('#readerContent .tts-word');
+      return ttsBtn && ttsBtn.classList.contains('active') && playerBar && playerBar.classList.contains('active') && wordSpans.length > 0;
     });
+    const ttsPlaying = await page.evaluate(() => {
+      const wordSpans = document.querySelectorAll('#readerContent .tts-word');
+      return {
+        wordCount: wordSpans.length,
+        hasWordIndices: Array.from(wordSpans).every(span => span.hasAttribute('data-word-idx')),
+        audioBarHidden: document.querySelector('#audioPlayerBar')?.getAttribute('aria-hidden')
+      };
+    });
+    assert(ttsPlaying.wordCount > 0, 'No .tts-word spans found after starting TTS');
+    assert(ttsPlaying.hasWordIndices, 'Word spans are missing data-word-idx attributes');
+    assert(ttsPlaying.audioBarHidden === 'false', 'Active audio player bar should not be aria-hidden');
     await page.click('#ttsBtn'); // Pause
     await page.waitForFunction(() => {
       const ttsBtn = document.querySelector('#ttsBtn');
@@ -355,7 +362,8 @@ async function runDeepPlaywrightChecks() {
     await page.waitForFunction(() => {
       const ttsBtn = document.querySelector('#ttsBtn');
       const stopBtn = document.querySelector('#ttsStopBtn');
-      return ttsBtn && !ttsBtn.classList.contains('active') && stopBtn && stopBtn.disabled;
+      const playerBar = document.querySelector('#audioPlayerBar');
+      return ttsBtn && !ttsBtn.classList.contains('active') && stopBtn && stopBtn.disabled && playerBar?.getAttribute('aria-hidden') === 'true';
     });
     results.push('TTS audio controls, tokenization, and lifecycle passed.');
 

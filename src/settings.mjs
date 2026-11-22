@@ -4,25 +4,17 @@ import {
   VALID_THEMES,
   darkPresets,
   fontMap,
-  lightPresets,
-  textColorMap
+  lightPresets
 } from './constants.mjs';
 import { clampIndex, clampNumber, getElementTarget } from './utils.mjs';
 import { createPresetCarousel } from './preset-carousel.mjs';
 
-export function createSettings(context, { ui: _ui, onResetToolbarTimer, isMobileSheetLayout }) {
+export function createSettings(context, { onResetToolbarTimer, isMobileSheetLayout }) {
   const { els, state, runtime } = context;
-  const loadedFonts = runtime.fonts.loaded;
   let initialized = false;
 
   function getPresets() {
     return state.currentMode === 'dark' ? darkPresets : lightPresets;
-  }
-
-  function ensureFontLoaded(fontKey) {
-    if (loadedFonts.has(fontKey)) return;
-    if (!fontMap[fontKey]) return;
-    loadedFonts.add(fontKey);
   }
 
   const carousel = createPresetCarousel(context, {
@@ -46,16 +38,10 @@ export function createSettings(context, { ui: _ui, onResetToolbarTimer, isMobile
     updateThemeSettingsSummary
   } = carousel;
 
-
-
-
-
-
   function setFont(font) {
     const nextFont = VALID_FONTS.has(font) ? font : 'sans';
     const config = fontMap[nextFont];
     if (!config) return;
-    ensureFontLoaded(nextFont);
     if (typeof document !== 'undefined' && document.documentElement?.style) {
       document.documentElement.style.setProperty('--body-font', config.family);
       document.documentElement.style.setProperty('--heading-weight', config.weight);
@@ -72,19 +58,6 @@ export function createSettings(context, { ui: _ui, onResetToolbarTimer, isMobile
     }
   }
 
-  function applyTextColor(color) {
-    if (!els.readerContent) return;
-    const modeColors = textColorMap[state.currentMode] || textColorMap.light;
-    const value = modeColors[color] || '';
-    if (value) els.readerContent.style.setProperty('--reader-text-color', value);
-    else els.readerContent.style.removeProperty('--reader-text-color');
-  }
-
-  function setTextColor(color) {
-    state.currentTextColor = color || 'default';
-    applyTextColor(state.currentTextColor);
-  }
-
   function applyPreset(index, options = {}) {
     const list = getPresets();
     const safeIndex = clampIndex(index, list.length);
@@ -93,14 +66,11 @@ export function createSettings(context, { ui: _ui, onResetToolbarTimer, isMobile
     state.currentPresetIndex = safeIndex;
     setFont(preset.font);
     setTheme(preset.theme);
-    setTextColor(preset.color);
     setTrackPosition(safeIndex, options.animate !== false);
     updateDots();
     updatePresetA11y();
     if (options.resetTimer !== false) onResetToolbarTimer();
   }
-
-
 
   function setMode(mode, options = {}) {
     state.currentMode = mode === 'dark' ? 'dark' : 'light';
@@ -132,22 +102,35 @@ export function createSettings(context, { ui: _ui, onResetToolbarTimer, isMobile
   function setSettingsSectionExpanded(section, expanded) {
     if (!section) return;
     const isExpanded = Boolean(expanded);
-    const toggle = section.querySelector('.settings-section-toggle');
+    const toggle = typeof section.querySelector === 'function' ? section.querySelector('.settings-section-toggle') : null;
     const panelId = toggle ? toggle.getAttribute('aria-controls') : '';
-    const panel = panelId ? document.getElementById(panelId) : section.querySelector('.settings-section-panel');
+    const panel = panelId && typeof document !== 'undefined' && typeof document.getElementById === 'function'
+      ? document.getElementById(panelId)
+      : (typeof section.querySelector === 'function' ? section.querySelector('.settings-section-panel') : null);
     section.classList.toggle('is-open', isExpanded);
     if (toggle) toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
     if (panel) {
       panel.hidden = !isExpanded;
       panel.setAttribute('aria-hidden', isExpanded ? 'false' : 'true');
     }
+    if (
+      typeof section.getAttribute === 'function' &&
+      section.getAttribute('data-settings-section') === 'listen' &&
+      els.readerContent?.classList &&
+      typeof els.readerContent.classList.toggle === 'function'
+    ) {
+      const interactive = isExpanded || Boolean(runtime?.tts?.isSpeaking);
+      els.readerContent.classList.toggle('tts-interactive', interactive);
+    }
   }
 
   function resetSettingsSections() {
     if (els.settingsDrawer) els.settingsDrawer.classList.add('active');
-    els.settingsSections.forEach(section => {
-      setSettingsSectionExpanded(section, section.getAttribute('data-settings-section') === 'theme');
-    });
+    if (Array.isArray(els.settingsSections)) {
+      els.settingsSections.forEach(section => {
+        setSettingsSectionExpanded(section, section.getAttribute('data-settings-section') === 'theme');
+      });
+    }
     updateThemeSettingsSummary();
   }
 
@@ -156,7 +139,7 @@ export function createSettings(context, { ui: _ui, onResetToolbarTimer, isMobile
     const expanded = !section.classList.contains('is-open');
     setSettingsSectionExpanded(section, expanded);
     onResetToolbarTimer();
-    if (expanded && isMobileSheetLayout() && els.toolbar) {
+    if (expanded && isMobileSheetLayout() && els.toolbar && typeof window !== 'undefined' && window.requestAnimationFrame) {
       window.requestAnimationFrame(() => section.scrollIntoView({ block: 'nearest' }));
     }
   }
@@ -248,6 +231,7 @@ export function createSettings(context, { ui: _ui, onResetToolbarTimer, isMobile
         if (state.isDraggingCarousel) state.dragCurrentX = event.clientX;
       });
       window.addEventListener('mouseup', endCarouselDrag);
+      window.addEventListener('blur', endCarouselDrag);
     }
     if (els.readerView) attachGestureArea(els.readerView);
     else if (els.readerContent) attachGestureArea(els.readerContent);
@@ -258,7 +242,6 @@ export function createSettings(context, { ui: _ui, onResetToolbarTimer, isMobile
 
   return {
     applyPreset,
-    applyTextColor,
     attachGestureArea,
     bindEvents,
     buildPresetCarousel,

@@ -18,6 +18,22 @@ export function createTTS(context, { ui }) {
   const session = runtime.tts;
   let initialized = false;
 
+  function isListenSectionOpen() {
+    const listenSection = Array.isArray(els.settingsSections)
+      ? els.settingsSections.find(section => section && typeof section.getAttribute === 'function' && section.getAttribute('data-settings-section') === 'listen')
+      : (typeof document !== 'undefined' && typeof document.querySelector === 'function'
+        ? document.querySelector('[data-settings-section="listen"]')
+        : null);
+    return Boolean(listenSection && listenSection.classList && listenSection.classList.contains('is-open'));
+  }
+
+  function clearPageHideTimer() {
+    if (session.pageHideTimer) {
+      clearTimeout(session.pageHideTimer);
+      session.pageHideTimer = null;
+    }
+  }
+
   function clearHighlight() {
     if (session.currentWordIndex >= 0 && session.wordSpans[session.currentWordIndex]) {
       session.wordSpans[session.currentWordIndex].classList.remove('active');
@@ -167,9 +183,6 @@ export function createTTS(context, { ui }) {
       populateVoices();
       if (session.voices.length || elapsed >= VOICE_POLL_TIMEOUT) {
         clearInterval(intervalId);
-        if (session.voices.length && session.synth && 'onvoiceschanged' in session.synth) {
-          session.synth.onvoiceschanged = null;
-        }
       }
     }, VOICE_POLL_MS);
   }
@@ -264,8 +277,21 @@ export function createTTS(context, { ui }) {
       }
     }
     if (els.ttsStopBtn) els.ttsStopBtn.disabled = idle;
-    if (els.audioPlayerBar) els.audioPlayerBar.classList.toggle('active', !idle);
+    if (els.audioPlayerBar) {
+      if (els.audioPlayerBar.classList && typeof els.audioPlayerBar.classList.toggle === 'function') {
+        els.audioPlayerBar.classList.toggle('active', !idle);
+      }
+      if (typeof els.audioPlayerBar.setAttribute === 'function') {
+        els.audioPlayerBar.setAttribute('aria-hidden', idle ? 'true' : 'false');
+      }
+      if (ui && typeof ui.setContainerFocusable === 'function') {
+        ui.setContainerFocusable(els.audioPlayerBar, !idle);
+      }
+    }
     if (els.audioPlayPauseBtn) {
+      if (typeof els.audioPlayPauseBtn.setAttribute === 'function') {
+        els.audioPlayPauseBtn.setAttribute('aria-pressed', playing ? 'true' : 'false');
+      }
       if (playing) {
         els.audioPlayPauseBtn.innerHTML = '<span aria-hidden="true">&#x23F8;</span>';
         els.audioPlayPauseBtn.setAttribute('aria-label', 'Pause narration');
@@ -278,6 +304,9 @@ export function createTTS(context, { ui }) {
     }
     if (els.audioStopBtn) els.audioStopBtn.disabled = idle;
     if (els.audioStatusText) els.audioStatusText.textContent = playing ? 'Speaking...' : paused ? 'Paused' : 'Speech Ready';
+    if (els.readerContent && els.readerContent.classList && typeof els.readerContent.classList.toggle === 'function') {
+      els.readerContent.classList.toggle('tts-interactive', playing || paused || isListenSectionOpen());
+    }
   }
 
   function buildUtterance(chunk, generation) {
@@ -339,6 +368,7 @@ export function createTTS(context, { ui }) {
 
   function restartFromWord(index) {
     if (!session.supported || !session.synth || !session.fullSpokenText || !session.wordMeta.length) return;
+    clearPageHideTimer();
     const meta = session.wordMeta[index];
     const startChar = meta ? meta.start : 0;
     session.chunks = chunkText(session.fullSpokenText.slice(startChar), startChar);
@@ -388,6 +418,7 @@ export function createTTS(context, { ui }) {
 
   function resumeSpeech() {
     if (session.state !== STATE_PAUSED) return;
+    clearPageHideTimer();
     const isLongPause = Boolean(session.pausedAt && (Date.now() - session.pausedAt > 10000));
     if (session.isMobile || session.speechCanceledWhileHidden || session.visibilityInterrupted || isLongPause) {
       restartFromWord(session.currentWordIndex >= 0 ? session.currentWordIndex : 0);
@@ -408,6 +439,7 @@ export function createTTS(context, { ui }) {
 
   function stopTTS() {
     if (session.finishing) return;
+    clearPageHideTimer();
     const wasActive = session.state !== STATE_IDLE;
     session.finishing = true;
     session.speechGeneration += 1;
@@ -451,7 +483,7 @@ export function createTTS(context, { ui }) {
   }
 
   function handlePageHide() {
-    if (session.pageHideTimer) clearTimeout(session.pageHideTimer);
+    clearPageHideTimer();
     if (session.state === STATE_PLAYING) {
       session.visibilityInterrupted = true;
       stopEstimateTimer();
@@ -464,17 +496,19 @@ export function createTTS(context, { ui }) {
       }
       setState(STATE_PAUSED);
     }
-    session.pageHideTimer = setTimeout(() => {
-      if (session.visibilityInterrupted && session.state === STATE_PAUSED) session.speechCanceledWhileHidden = true;
-      try { session.synth.cancel(); } catch (err) {}
-    }, PAGEHIDE_CANCEL_TIMEOUT);
+    if (session.state === STATE_PAUSED) {
+      session.pageHideTimer = setTimeout(() => {
+        session.pageHideTimer = null;
+        if (session.state !== STATE_PAUSED) return;
+        session.speechCanceledWhileHidden = true;
+        session.speechGeneration += 1;
+        try { session.synth.cancel(); } catch (err) {}
+      }, PAGEHIDE_CANCEL_TIMEOUT);
+    }
   }
 
   function handlePageShow() {
-    if (session.pageHideTimer) {
-      clearTimeout(session.pageHideTimer);
-      session.pageHideTimer = null;
-    }
+    clearPageHideTimer();
   }
 
   function handleVisibilityChange() {
@@ -532,17 +566,10 @@ export function createTTS(context, { ui }) {
   function initializeVoices() {
     if (!session.supported || !session.synth) return;
     populateVoices();
-    if (session.voices.length) {
-      if ('onvoiceschanged' in session.synth) session.synth.onvoiceschanged = null;
-    } else {
-      if ('onvoiceschanged' in session.synth) {
-        session.synth.onvoiceschanged = () => {
-          populateVoices();
-          if (session.voices.length && 'onvoiceschanged' in session.synth) {
-            session.synth.onvoiceschanged = null;
-          }
-        };
-      }
+    if ('onvoiceschanged' in session.synth) {
+      session.synth.onvoiceschanged = populateVoices;
+    }
+    if (!session.voices.length) {
       pollVoices();
     }
   }
@@ -553,6 +580,8 @@ export function createTTS(context, { ui }) {
     cycleVoiceSpeed,
     findWordIndexByChar,
     getSession: () => session,
+    handlePageHide,
+    handlePageShow,
     highlightAtIndex,
     invalidateTokenization,
     pauseSpeech,

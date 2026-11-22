@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Reader">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -60,7 +60,7 @@
                 </div>
                 <button class="preset-arrow" id="arrowRight" type="button" aria-label="Next Preset"><span aria-hidden="true">&#10095;</span></button>
               </div>
-              <div class="preset-dots" id="presetDots"></div>
+              <div class="preset-dots" id="presetDots" aria-hidden="true"></div>
               <div class="mode-toggle-row">
                 <button class="mode-btn active" id="modeLight" type="button" aria-pressed="true"><span aria-hidden="true">&#9728;</span> Light</button>
                 <button class="mode-btn" id="modeDark" type="button" aria-pressed="false"><span aria-hidden="true">&#9790;</span> Dark</button>
@@ -123,7 +123,7 @@
               <div class="settings-row">
                 <div class="control-item voice-control">
                   <label for="voiceSelect">Voice</label>
-                  <select id="voiceSelect"></select>
+                  <select id="voiceSelect"><option value="">System default voice</option></select>
                 </div>
                 <div class="control-item">
                   <div class="control-label-row">
@@ -144,7 +144,7 @@
     <div class="status-message reader-status-message" id="readerStatusMessage" role="status" aria-live="polite"></div>
 
     <!-- Floating Audio Player Bar -->
-    <div class="audio-player-bar" id="audioPlayerBar" role="region" aria-label="Audio player controls">
+    <div class="audio-player-bar" id="audioPlayerBar" role="region" aria-label="Audio player controls" aria-hidden="true">
       <button class="audio-bar-btn" id="audioPlayPauseBtn" type="button" title="Play or Pause narration" aria-label="Play or Pause narration"><span aria-hidden="true">&#x25B6;</span></button>
       <button class="audio-bar-btn" id="audioStopBtn" type="button" title="Stop narration" aria-label="Stop narration" disabled><span aria-hidden="true">&#x23F9;</span></button>
       <div class="audio-bar-info">

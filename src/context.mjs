@@ -6,10 +6,8 @@ export function createAppContext(els) {
     els,
     state: {
       currentText: '',
-      focusMode: false,
       currentPresetIndex: 0,
       currentMode: 'light',
-      currentTextColor: 'default',
       toolbarTimer: null,
       gestureHintTimer: null,
       statusTimer: null,
@@ -22,32 +20,13 @@ export function createAppContext(els) {
       gestureStartY: 0,
       gestureStartTime: 0,
       isGesture: false,
-      isEditing: false,
       smartHeadings: true,
-      textSource: 'paste',
-      activeFileName: '',
-      wordCountTimer: null,
       lastCarouselDragDistance: 0
     },
     runtime: {
-      autoScroll: {
-        active: false,
-        speed: 0.04,
-        lastScrollTime: 0,
-        accumulator: 0
-      },
       reader: {
         activeRenderId: 0,
-        isRulerActive: false,
-        editDebounceTimer: null,
         lastActiveElement: null
-      },
-      file: {
-        activeReadToken: 0,
-        loadedLibraries: new Map()
-      },
-      fonts: {
-        loaded: new Set(['sans', 'serif'])
       },
       tts: {
         voices: [],

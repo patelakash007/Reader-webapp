@@ -1,5 +1,6 @@
 export function createUI(context) {
   const { els, state } = context;
+  let announceTimer = null;
 
   function updateStatusTarget(target, message, type) {
     if (!target) return;
@@ -39,26 +40,22 @@ export function createUI(context) {
   }
 
   function announceLive(msg) {
-    if (typeof document === 'undefined') return;
+    if (typeof document === 'undefined' || !document.body) return;
     let live = document.getElementById('liveAnnouncer');
     if (!live) {
       live = document.createElement('div');
       live.id = 'liveAnnouncer';
       live.className = 'sr-only';
       live.setAttribute('aria-live', 'polite');
-      live.style.position = 'absolute';
-      live.style.width = '1px';
-      live.style.height = '1px';
-      live.style.padding = '0';
-      live.style.margin = '-1px';
-      live.style.overflow = 'hidden';
-      live.style.clip = 'rect(0, 0, 0, 0)';
-      live.style.whiteSpace = 'nowrap';
-      live.style.border = '0';
       document.body.appendChild(live);
     }
+    if (announceTimer !== null) {
+      clearTimeout(announceTimer);
+      announceTimer = null;
+    }
     live.textContent = '';
-    setTimeout(() => {
+    announceTimer = setTimeout(() => {
+      announceTimer = null;
       live.textContent = msg;
     }, 50);
   }

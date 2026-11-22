@@ -3,6 +3,7 @@
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const { MockDocument } = require('./mock_dom');
 
 (async () => {
   const parser = await import('../src/parser.mjs');
@@ -31,7 +32,8 @@ const path = require('node:path');
   assert(scriptSource.includes("import('./src/app.mjs')"), 'script.js should dynamically import the ES module application entry');
   assert(!scriptSource.includes('speechGeneration'), 'speech session state should not leak into the compatibility shim');
   const initialContext = createAppContext({});
-  assert.strictEqual(initialContext.state.textSource, 'paste', 'state.textSource must initialize to paste');
+  assert.strictEqual(initialContext.state.smartHeadings, true, 'state.smartHeadings must initialize to true');
+  assert.strictEqual(initialContext.runtime.reader.activeRenderId, 0, 'activeRenderId must initialize to 0');
   console.log('✓ Check 1: Compatibility entry and module contract validation passed.');
 
   const short = 'This is a short sample sentence.';
@@ -52,20 +54,10 @@ const path = require('node:path');
   assert.deepStrictEqual(giantChunks.map(chunk => chunk.text.length), [190, 60]);
   console.log('✓ Check 2: 190-character chunking algorithm passed.');
 
-  const utf8Buffer = new Uint8Array([0x48, 0x65, 0x6C, 0x6C, 0x6F]);
-  assert.strictEqual(parser.decodeTextBuffer(utf8Buffer), 'Hello');
-  const utf8BomBuffer = new Uint8Array([0xEF, 0xBB, 0xBF, 0x48, 0x69]);
-  assert.strictEqual(parser.decodeTextBuffer(utf8BomBuffer), 'Hi');
-  const utf16leBomBuffer = new Uint8Array([0xFF, 0xFE, 0x48, 0x00, 0x69, 0x00]);
-  assert.strictEqual(parser.decodeTextBuffer(utf16leBomBuffer), 'Hi');
-  const utf16beBomBuffer = new Uint8Array([0xFE, 0xFF, 0x00, 0x48, 0x00, 0x69]);
-  assert.strictEqual(parser.decodeTextBuffer(utf16beBomBuffer), 'Hi');
-  const win1252Buffer = new Uint8Array([0x93, 0x48, 0x69, 0x94]);
-  assert.strictEqual(parser.decodeTextBuffer(win1252Buffer), '“Hi”');
-  const parserInstance = parser.createParser(initialContext);
+  const parserInstance = parser.createParser();
   assert.strictEqual(typeof parserInstance.enforceExtractedTextLimit, 'function');
   assert.strictEqual(typeof parserInstance.parseMarkdownToHtml, 'function');
-  console.log('✓ Check 3: Text buffer decoding (UTF-8, BOMs, Windows-1252) and parser factory passed.');
+  console.log('✓ Check 3: Parser factory contract passed.');
 
   const mockVoices = [
     { name: 'Google US English', lang: 'en-US', voiceURI: 'google-en-us', default: false },
@@ -79,89 +71,6 @@ const path = require('node:path');
   assert.strictEqual(tts.resolveVoiceIndex(sorted, 'anna', 'en-US'), sorted.findIndex(v => v.voiceURI === 'anna'));
   assert.strictEqual(tts.resolveVoiceIndex(sorted, 'non-existent', 'de-DE'), sorted.findIndex(v => v.lang === 'de-DE'));
   console.log('✓ Check 4: Production voice deduplication and selection passed.');
-
-  class MockNode {
-    constructor(nodeType, nodeValue = null, tagName = null) {
-      this.nodeType = nodeType;
-      this.nodeValue = nodeValue;
-      this.tagName = tagName;
-      this.childNodes = [];
-      this.parentNode = null;
-      this.attributes = {};
-      this.classList = {
-        values: new Set(),
-        add: value => this.classList.values.add(value),
-        remove: value => this.classList.values.delete(value),
-        has: value => this.classList.values.has(value)
-      };
-    }
-    get parentElement() {
-      return this.nodeType === 1 ? this : this.parentNode && this.parentNode.nodeType === 1 ? this.parentNode : null;
-    }
-    appendChild(child) {
-      child.parentNode = this;
-      this.childNodes.push(child);
-      return child;
-    }
-    replaceChild(newChild, oldChild) {
-      const index = this.childNodes.indexOf(oldChild);
-      if (index === -1) return;
-      if (newChild.nodeType === 11) {
-        const children = [...newChild.childNodes];
-        children.forEach(child => { child.parentNode = this; });
-        this.childNodes.splice(index, 1, ...children);
-        newChild.childNodes = [];
-      } else {
-        newChild.parentNode = this;
-        this.childNodes.splice(index, 1, newChild);
-      }
-    }
-    setAttribute(name, value) { this.attributes[name] = value; }
-    getAttribute(name) { return this.attributes[name] || null; }
-    hasAttribute(name) { return Object.prototype.hasOwnProperty.call(this.attributes, name); }
-    closest(selector) {
-      const tags = selector.split(',').map(value => value.trim().toUpperCase());
-      let current = this;
-      while (current) {
-        if (current.tagName && tags.includes(current.tagName.toUpperCase())) return current;
-        current = current.parentNode;
-      }
-      return null;
-    }
-    get textContent() {
-      return this.nodeType === 3 ? this.nodeValue : this.childNodes.map(child => child.textContent).join('');
-    }
-    set textContent(value) {
-      this.childNodes = [new MockNode(3, value)];
-      this.childNodes[0].parentNode = this;
-    }
-  }
-
-  class MockDocument {
-    createTextNode(text) { return new MockNode(3, text); }
-    createElement(tag) { return new MockNode(1, null, tag.toUpperCase()); }
-    createDocumentFragment() { return new MockNode(11); }
-    createTreeWalker(root, showWhat, filter) {
-      const nodes = [];
-      const visit = node => {
-        if (node.nodeType === 3) {
-          if (!filter || filter.acceptNode(node) !== NodeFilter.FILTER_SKIP) nodes.push(node);
-          return;
-        }
-        node.childNodes.forEach(visit);
-      };
-      visit(root);
-      let index = -1;
-      return {
-        currentNode: null,
-        nextNode() {
-          index += 1;
-          this.currentNode = nodes[index] || null;
-          return Boolean(this.currentNode);
-        }
-      };
-    }
-  }
 
   global.NodeFilter = { SHOW_TEXT: 4, FILTER_ACCEPT: 1, FILTER_REJECT: 2, FILTER_SKIP: 3 };
   const documentObject = new MockDocument();
@@ -204,8 +113,8 @@ const path = require('node:path');
     '> quoted text'
   ].join('\n');
   const html = parser.parseMarkdownToHtml(markdown);
-  assert(html.includes('<h1 id="heading-0">Heading</h1>'));
-  assert(html.includes('<h2 id="heading-2">HELLO SECTION</h2>'));
+  assert(html.includes('<h1 id="heading">Heading</h1>'));
+  assert(html.includes('<h2 id="hello-section">HELLO SECTION</h2>'));
   assert(html.includes('<strong>bold</strong>'));
   assert(html.includes('<em>emphasis</em>'));
   assert(html.includes('<a href="https://example.com" target="_blank" rel="noopener noreferrer">safe</a>'));
@@ -214,10 +123,9 @@ const path = require('node:path');
   assert(html.includes('<ol><li>ordered item</li></ol>'));
   console.log('✓ Check 6: Production Markdown rendering and sanitization passed.');
 
-  assert.strictEqual(parser.getExtension('sample.MARKDOWN'), 'markdown');
   assert.strictEqual(parser.enforceExtractedTextLimit('valid text'), 'valid text');
   assert.throws(() => parser.enforceExtractedTextLimit('x'.repeat(1_000_001)), /too much extracted text/);
-  console.log('✓ Check 7: Production file helpers and extracted-text limits passed.');
+  console.log('✓ Check 7: Extracted-text limit validation passed.');
 
   assert.strictEqual(constants.lightPresets.length, 10);
   assert.strictEqual(constants.darkPresets.length, 10);
@@ -228,7 +136,7 @@ const path = require('node:path');
   assert.deepStrictEqual(constants.darkPresets.map(preset => preset.name), expectedDarkNames);
   [...constants.lightPresets, ...constants.darkPresets].forEach(preset => {
     assert(constants.VALID_THEMES.has(preset.theme));
-    assert(preset.name && preset.font && preset.theme && preset.color && preset.desc);
+    assert(preset.name && preset.font && preset.theme && preset.desc);
   });
   console.log('✓ Check 8: Production preset and theme inventory passed.');
 

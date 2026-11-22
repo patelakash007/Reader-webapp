@@ -41,6 +41,13 @@ export function chunkText(text, baseOffset = 0, targetLen = CHUNK_TARGET) {
     }
 
     if (splitAt === -1) splitAt = end;
+    if (splitAt > start && splitAt < len) {
+      const prevCode = text.charCodeAt(splitAt - 1);
+      if (prevCode >= 0xD800 && prevCode <= 0xDBFF) {
+        if (splitAt - 1 > start) splitAt -= 1;
+        else splitAt += 1;
+      }
+    }
     out.push({ text: text.slice(start, splitAt), start: baseOffset + start, end: baseOffset + splitAt });
     start = splitAt;
     while (start < len && /\s/.test(text[start])) start += 1;
@@ -109,7 +116,7 @@ export function tokenizeReaderDOM(containerElement, documentObject = document) {
 
   const walker = documentObject.createTreeWalker(containerElement, filterShowText, {
     acceptNode(node) {
-      if (!node.nodeValue || !node.nodeValue.trim()) return filterSkip;
+      if (!node.nodeValue) return filterSkip;
       const parent = node.parentElement;
       if (!parent) return filterSkip;
       const tag = parent.tagName.toLowerCase();
@@ -126,9 +133,29 @@ export function tokenizeReaderDOM(containerElement, documentObject = document) {
   let currentLen = 0;
   let trailingWhitespace = false;
   let trailingNewlines = 0;
+  let pendingBreak = '';
 
   textNodes.forEach(textNode => {
     const text = textNode.nodeValue;
+    if (!text) return;
+
+    const afterBr = Boolean(
+      textNode.previousSibling &&
+      textNode.previousSibling.tagName &&
+      textNode.previousSibling.tagName.toUpperCase() === 'BR'
+    );
+
+    if (!text.trim()) {
+      if (currentLen > 0) {
+        if (afterBr || (pendingBreak === '\n' && /[\r\n]/.test(text))) {
+          pendingBreak = '\n';
+        } else if (!pendingBreak) {
+          pendingBreak = ' ';
+        }
+      }
+      return;
+    }
+
     const parentBlock = textNode.parentElement
       ? textNode.parentElement.closest('p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, td, th, tr, table')
       : null;
@@ -142,11 +169,23 @@ export function tokenizeReaderDOM(containerElement, documentObject = document) {
         trailingNewlines = 2;
         trailingWhitespace = true;
       }
-    } else if (currentLen > 0 && !trailingWhitespace && !/^\s/.test(text) && !/^[.,!?;:)\]}\u2019\u201D]/.test(text)) {
+      pendingBreak = '';
+    } else if (currentLen > 0 && (afterBr || pendingBreak === '\n')) {
+      if (trailingNewlines < 1 && !/^\s/.test(text)) {
+        textParts.push('\n');
+        currentLen += 1;
+        trailingNewlines = 1;
+        trailingWhitespace = true;
+      }
+      pendingBreak = '';
+    } else if (currentLen > 0 && pendingBreak && !trailingWhitespace && !/^\s/.test(text)) {
       textParts.push(' ');
       currentLen += 1;
       trailingWhitespace = true;
       trailingNewlines = 0;
+      pendingBreak = '';
+    } else {
+      pendingBreak = '';
     }
     lastBlockElement = parentBlock;
 

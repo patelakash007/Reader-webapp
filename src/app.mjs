@@ -7,10 +7,10 @@ import { cleanupLegacyBrowserStorage } from './storage.mjs';
 import { createTTS } from './tts.mjs';
 import { createUI } from './ui.mjs';
 
-let initialized = false;
+const initializedDocuments = new WeakSet();
 
 function registerServiceWorker() {
-  if (!('serviceWorker' in navigator)) return;
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
 
   const register = () => {
     navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
@@ -19,23 +19,23 @@ function registerServiceWorker() {
       });
   };
 
-  if (document.readyState === 'complete') register();
-  else window.addEventListener('load', register, { once: true });
+  if (typeof document !== 'undefined' && document.readyState === 'complete') register();
+  else if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('load', register, { once: true });
+  }
 }
 
 export function init(documentObject = document) {
-  if (initialized) return;
-  initialized = true;
+  if (!documentObject || initializedDocuments.has(documentObject)) return;
+  initializedDocuments.add(documentObject);
 
   const els = collectElements(documentObject);
   const context = createAppContext(els);
   const ui = createUI(context);
   const tts = createTTS(context, { ui });
-  const parser = createParser(context, { ui });
+  const parser = createParser();
   let reader;
   const settings = createSettings(context, {
-    ui,
-    getSettings: () => settings,
     isMobileSheetLayout: () => reader && reader.isMobileSheetLayout(),
     onResetToolbarTimer: () => reader && reader.resetToolbarTimer()
   });
@@ -58,14 +58,20 @@ export function init(documentObject = document) {
   settings.setSize('medium');
   reader.toggleClearBtn();
   if (els.toolbar) ui.setContainerFocusable(els.toolbar, false);
+  if (els.audioPlayerBar) {
+    if (typeof els.audioPlayerBar.setAttribute === 'function') {
+      els.audioPlayerBar.setAttribute('aria-hidden', 'true');
+    }
+    ui.setContainerFocusable(els.audioPlayerBar, false);
+  }
 
   const defaultLineHeight = 1.85;
   if (els.lineHeightInput) els.lineHeightInput.value = defaultLineHeight;
-  if (els.readerContent) els.readerContent.style.lineHeight = defaultLineHeight;
+  if (els.readerContent && els.readerContent.style) els.readerContent.style.lineHeight = defaultLineHeight;
 
   const defaultLetterSpacing = -0.015;
   if (els.letterSpacingInput) els.letterSpacingInput.value = defaultLetterSpacing;
-  if (els.readerContent) els.readerContent.style.letterSpacing = `${defaultLetterSpacing}em`;
+  if (els.readerContent && els.readerContent.style) els.readerContent.style.letterSpacing = `${defaultLetterSpacing}em`;
 
   const defaultMargin = 24;
   if (els.marginInput) els.marginInput.value = defaultMargin;

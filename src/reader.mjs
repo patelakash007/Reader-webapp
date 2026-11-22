@@ -1,4 +1,4 @@
-import { cancelPendingRender, getElementTarget, getScrollTop } from './utils.mjs';
+import { cancelPendingRender, formatError, getElementTarget, getScrollTop } from './utils.mjs';
 import { createReaderRenderer } from './reader-renderer.mjs';
 import { createReaderNavigation } from './reader-navigation.mjs';
 
@@ -6,13 +6,9 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
   const { els, state } = context;
   let initialized = false;
   let scrollProgressPending = false;
+  let isPointerOverToolbar = false;
 
-  function applyTextColor() {
-    const settings = getSettings();
-    if (settings) settings.applyTextColor(state.currentTextColor);
-  }
-
-  const renderer = createReaderRenderer(context, { ui, tts, applyTextColor });
+  const renderer = createReaderRenderer(context, { ui, tts });
   const { renderTextAsync } = renderer;
   const navigation = createReaderNavigation(context, {
     ui,
@@ -23,6 +19,7 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
     collapseMobileSheet,
     expandMobileSheet,
     isMobileSheetLayout,
+    syncLayoutOnResize,
     toggleMobileSheet
   } = navigation;
 
@@ -37,7 +34,9 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
     ui.setContainerFocusable(els.toolbar, true);
     if (typeof window !== 'undefined' && window.clearTimeout) {
       window.clearTimeout(state.toolbarTimer);
+      if (isPointerOverToolbar) return;
       state.toolbarTimer = window.setTimeout(() => {
+        if (isPointerOverToolbar) return;
         if (typeof document !== 'undefined' && els.toolbar.contains(document.activeElement)) return;
         els.toolbar.classList.add('hidden-bar');
         ui.setContainerFocusable(els.toolbar, false);
@@ -50,11 +49,23 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
     if (settings && els.marginInput) settings.updateMarginStyle(parseFloat(els.marginInput.value));
   }
 
+  function isClickToSpeakEnabled(session) {
+    if (!session || !session.supported) return false;
+    if (session.isSpeaking) return true;
+    const listenSection = Array.isArray(els.settingsSections)
+      ? els.settingsSections.find(section => section && typeof section.getAttribute === 'function' && section.getAttribute('data-settings-section') === 'listen')
+      : (typeof document !== 'undefined' && typeof document.querySelector === 'function'
+        ? document.querySelector('[data-settings-section="listen"]')
+        : null);
+    return Boolean(listenSection && listenSection.classList && listenSection.classList.contains('is-open'));
+  }
+
   function enterReader() {
+    isPointerOverToolbar = false;
     if (els.inputView) els.inputView.classList.add('hidden');
     if (els.readerView) els.readerView.classList.add('active');
     if (els.backBtn) els.backBtn.classList.add('show');
-    if (els.toolbar) els.toolbar.classList.remove('hidden-bar', 'force-hidden', 'expanded');
+    if (els.toolbar) els.toolbar.classList.remove('hidden-bar', 'expanded');
     if (els.sheetBackdrop) els.sheetBackdrop.classList.remove('show');
     if (typeof document !== 'undefined' && document.body) {
       document.body.classList.remove('mobile-sheet-active');
@@ -75,8 +86,8 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
   }
 
   function goBack() {
+    isPointerOverToolbar = false;
     cancelPendingRender(context, { clearContent: true });
-    if (els.wordCount) els.wordCount.textContent = '';
     if (tts && typeof tts.stopTTS === 'function') {
       tts.stopTTS();
     }
@@ -127,7 +138,7 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
     try {
       safeText = parser.enforceExtractedTextLimit(text, 'pasted text');
     } catch (err) {
-      ui.showStatus(err && err.message ? err.message : 'Unknown error', 'error');
+      ui.showStatus(formatError(err), 'error');
       return;
     }
     ui.clearStatus();
@@ -190,7 +201,7 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
     if (els.readerContent) {
       els.readerContent.addEventListener('click', event => {
         const session = tts && typeof tts.getSession === 'function' ? tts.getSession() : null;
-        if (!session || !session.supported) return;
+        if (!isClickToSpeakEnabled(session)) return;
 
         if (typeof window !== 'undefined' && window.getSelection) {
           const selection = window.getSelection();
@@ -227,9 +238,17 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
       els.toolbar.addEventListener('click', resetToolbarTimer);
       els.toolbar.addEventListener('touchstart', resetToolbarTimer, { passive: true });
       els.toolbar.addEventListener('touchmove', resetToolbarTimer, { passive: true });
-      els.toolbar.addEventListener('mouseenter', () => window.clearTimeout(state.toolbarTimer));
-      els.toolbar.addEventListener('mouseleave', resetToolbarTimer);
-      els.toolbar.addEventListener('focusin', () => window.clearTimeout(state.toolbarTimer));
+      els.toolbar.addEventListener('mouseenter', () => {
+        isPointerOverToolbar = true;
+        if (typeof window !== 'undefined' && window.clearTimeout) window.clearTimeout(state.toolbarTimer);
+      });
+      els.toolbar.addEventListener('mouseleave', () => {
+        isPointerOverToolbar = false;
+        resetToolbarTimer();
+      });
+      els.toolbar.addEventListener('focusin', () => {
+        if (typeof window !== 'undefined' && window.clearTimeout) window.clearTimeout(state.toolbarTimer);
+      });
       els.toolbar.addEventListener('focusout', resetToolbarTimer);
     }
     if (typeof document !== 'undefined') {
@@ -238,9 +257,6 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
       });
       document.addEventListener('touchstart', event => {
         if (els.readerView && els.readerView.classList.contains('active') && els.toolbar && !els.toolbar.contains(event.target) && els.backBtn && !els.backBtn.contains(event.target) && els.mobileFab && !els.mobileFab.contains(event.target) && els.sheetBackdrop && !els.sheetBackdrop.contains(event.target)) resetToolbarTimer();
-      }, { passive: true });
-      document.addEventListener('scroll', () => {
-        if (els.readerView && els.readerView.classList.contains('active') && els.toolbar && els.toolbar.contains(document.activeElement)) resetToolbarTimer();
       }, { passive: true });
       document.addEventListener('mousemove', event => {
         if (
@@ -263,9 +279,29 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
         if (event.key === 'Escape') {
           if (els.toolbar && els.toolbar.classList.contains('expanded')) {
             collapseMobileSheet();
-          } else {
-            goBack();
+            return;
           }
+          const activeEl = typeof document !== 'undefined' ? document.activeElement : null;
+          const isToolbarFormControl = Boolean(
+            activeEl &&
+            els.toolbar &&
+            els.toolbar.contains(activeEl) &&
+            (typeof activeEl.matches === 'function'
+              ? activeEl.matches('input, select, textarea')
+              : /^(INPUT|SELECT|TEXTAREA)$/i.test(activeEl.tagName || ''))
+          );
+          if (isToolbarFormControl && typeof activeEl.blur === 'function') {
+            activeEl.blur();
+            return;
+          }
+          const selection = typeof window !== 'undefined' && typeof window.getSelection === 'function'
+            ? window.getSelection()
+            : null;
+          if (selection && !selection.isCollapsed && typeof selection.removeAllRanges === 'function') {
+            selection.removeAllRanges();
+            return;
+          }
+          goBack();
         }
         const settings = getSettings();
         if (event.key === 'ArrowRight' && settings && settings.canUseGlobalPresetShortcut(event)) {
@@ -283,7 +319,10 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
     if (els.bottomSheetHandle) els.bottomSheetHandle.addEventListener('click', collapseMobileSheet);
     if (typeof window !== 'undefined') {
       window.addEventListener('scroll', setInputProgress, { passive: true });
-      window.addEventListener('resize', updateMarginOnResize);
+      window.addEventListener('resize', () => {
+        updateMarginOnResize();
+        syncLayoutOnResize();
+      });
     }
   }
 
@@ -299,6 +338,7 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
     loadTextFlow,
     renderTextAsync,
     resetToolbarTimer,
+    syncLayoutOnResize,
     toggleClearBtn,
     toggleMobileSheet,
     updateMarginOnResize

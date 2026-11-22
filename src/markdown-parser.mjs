@@ -1,6 +1,27 @@
 import { escapeHtml } from './utils.mjs';
 import { Marked } from '../vendor/marked.esm.mjs';
 
+const RESERVED_DOM_IDS = new Set([
+  'app', 'progressbar', 'sheetbackdrop', 'mobilefab', 'inputview', 'pastearea',
+  'readbtn', 'clearbtn', 'statusmessage', 'readerview', 'backbtn', 'toolbar',
+  'bottomsheethandle', 'settingsdrawer', 'themesettingssummary', 'themesettingspanel',
+  'presetcarousel', 'arrowleft', 'presetwindow', 'presettrack', 'arrowright',
+  'presetdots', 'modelight', 'modedark', 'textsettingspanel', 'lineheightinput',
+  'letterspacinginput', 'margininput', 'listensettingspanel', 'ttsbtn', 'ttsstopbtn',
+  'voiceselect', 'voicerateval', 'voicerateinput', 'readercontent',
+  'readerstatusmessage', 'audioplayerbar', 'audioplaypausebtn', 'audiostopbtn',
+  'audiostatustext', 'audiospeedbtn', 'gesturehint', 'gesturehinttext', 'loader',
+  'liveannouncer'
+]);
+
+function hasControlChars(str) {
+  for (let i = 0; i < str.length; i += 1) {
+    const code = str.charCodeAt(i);
+    if (code <= 0x1F || code === 0x7F) return true;
+  }
+  return false;
+}
+
 function decodeHtmlAttributeValue(value) {
   if (typeof document === 'undefined') {
     return String(value)
@@ -30,7 +51,7 @@ function decodeHtmlAttributeValue(value) {
 export function normalizeSafeLinkHref(escapedUrl) {
   if (!escapedUrl || typeof escapedUrl !== 'string') return null;
   const cleanUrl = decodeHtmlAttributeValue(escapedUrl).trim();
-  if (!cleanUrl || /[\u0000-\u001F\u007F]/.test(cleanUrl)) return null;
+  if (!cleanUrl || hasControlChars(cleanUrl)) return null;
 
   const unsafeSchemeRegex = /^(javascript|data|vbscript|file|blob):/i;
   const safeSchemeRegex = /^(https?|ftp|mailto):/i;
@@ -47,7 +68,7 @@ export function normalizeSafeLinkHref(escapedUrl) {
 }
 
 export function isSmartHeading(trimmed) {
-  if (typeof trimmed !== 'string' || trimmed.length < 3 || trimmed.length > 55) return false;
+  if (typeof trimmed !== 'string' || trimmed.length < 4 || trimmed.length > 55) return false;
   if (/[\r\n]/.test(trimmed)) return false;
   if (!/^[A-Z][A-Z0-9 \t:—–-]{2,55}[A-Z0-9]$/.test(trimmed)) return false;
   if (/^[A-Z0-9]{2,6}(?:[ \t]+(?:AND|OR|&|\/)[ \t]+[A-Z0-9]{2,6})+$/i.test(trimmed)) return false;
@@ -57,6 +78,24 @@ export function isSmartHeading(trimmed) {
   return words.some(w => w.length >= 4) || words.length >= 2;
 }
 
+function extractTokenText(token) {
+  if (!token) return '';
+  if (Array.isArray(token.tokens) && token.tokens.length) {
+    return token.tokens.map(extractTokenText).join('');
+  }
+  return token.text || '';
+}
+
+function slugifyHeading(text) {
+  return String(text || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^\p{L}\p{N}\s-]/gu, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
 export function createMarkedInstance() {
   const instance = new Marked();
   instance.use({
@@ -64,7 +103,8 @@ export function createMarkedInstance() {
     breaks: false,
     renderer: {
       heading(token) {
-        const id = token.headingId !== undefined ? token.headingId : `heading-${Math.random().toString(36).slice(2, 11)}`;
+        const rawId = token.headingId !== undefined ? token.headingId : `heading-${Math.random().toString(36).slice(2, 11)}`;
+        const id = escapeHtml(String(rawId));
         const content = this.parser.parseInline(token.tokens);
         return `<h${token.depth} id="${id}">${content}</h${token.depth}>\n`;
       },
@@ -136,13 +176,14 @@ export function createMarkdownRenderer(smartHeadings = true) {
 
     function assignHeadingId(token, lineIndex) {
       if (token.type === 'heading' && !token.headingId) {
-        let id = `heading-${lineIndex}`;
-        if (usedHeadingIds.has(id)) {
+        const baseSlug = slugifyHeading(extractTokenText(token)) || `heading-${lineIndex}`;
+        let id = baseSlug;
+        if (usedHeadingIds.has(id) || RESERVED_DOM_IDS.has(id)) {
           let counter = 1;
-          while (usedHeadingIds.has(`${id}-${counter}`)) {
+          while (usedHeadingIds.has(`${baseSlug}-${counter}`) || RESERVED_DOM_IDS.has(`${baseSlug}-${counter}`)) {
             counter += 1;
           }
-          id = `${id}-${counter}`;
+          id = `${baseSlug}-${counter}`;
         }
         usedHeadingIds.add(id);
         token.headingId = id;

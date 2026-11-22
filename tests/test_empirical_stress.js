@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert');
+const { MockDocument } = require('./mock_dom');
 
 (async () => {
   const parser = await import('../src/parser.mjs');
@@ -16,7 +17,7 @@ const assert = require('node:assert');
   const context = createAppContext({});
   assert.strictEqual(context.runtime.tts.speechGeneration, 0);
   assert.strictEqual(context.runtime.reader.activeRenderId, 0);
-  assert.strictEqual(context.runtime.file.activeReadToken, 0);
+  assert.strictEqual(context.state.smartHeadings, true);
   assert.strictEqual(typeof parser.parseMarkdownToHtml, 'function');
   assert.strictEqual(typeof tts.tokenizeReaderDOM, 'function');
   console.log('✓ Production module contracts loaded without browser globals.');
@@ -46,91 +47,6 @@ const assert = require('node:assert');
   console.log('✓ Production chunking passed boundary conditions and edge cases.');
 
   console.log('\n--- 3. Production DOM tokenization and offset fidelity ---');
-  class MockNode {
-    constructor(nodeType, nodeValue = null, tagName = null) {
-      this.nodeType = nodeType;
-      this.nodeValue = nodeValue;
-      this.tagName = tagName;
-      this.childNodes = [];
-      this.parentNode = null;
-      this.attributes = {};
-      this.className = '';
-      this.classList = {
-        values: new Set(),
-        add: value => this.classList.values.add(value),
-        remove: value => this.classList.values.delete(value),
-        contains: value => this.classList.values.has(value)
-      };
-    }
-    get parentElement() {
-      if (this.nodeType === 1) return this;
-      return this.parentNode && this.parentNode.nodeType === 1 ? this.parentNode : null;
-    }
-    appendChild(child) {
-      child.parentNode = this;
-      this.childNodes.push(child);
-      return child;
-    }
-    replaceChild(newChild, oldChild) {
-      const index = this.childNodes.indexOf(oldChild);
-      if (index === -1) return;
-      if (newChild.nodeType === 11) {
-        const children = [...newChild.childNodes];
-        children.forEach(child => { child.parentNode = this; });
-        this.childNodes.splice(index, 1, ...children);
-        newChild.childNodes = [];
-      } else {
-        newChild.parentNode = this;
-        this.childNodes.splice(index, 1, newChild);
-      }
-    }
-    setAttribute(name, value) { this.attributes[name] = value; }
-    getAttribute(name) { return this.attributes[name] || null; }
-    hasAttribute(name) { return Object.prototype.hasOwnProperty.call(this.attributes, name); }
-    closest(selector) {
-      const tags = selector.split(',').map(value => value.trim().toUpperCase());
-      let current = this;
-      while (current) {
-        if (current.tagName && tags.includes(current.tagName.toUpperCase())) return current;
-        current = current.parentNode;
-      }
-      return null;
-    }
-    get textContent() {
-      return this.nodeType === 3 ? this.nodeValue : this.childNodes.map(child => child.textContent).join('');
-    }
-    set textContent(value) {
-      this.childNodes = [new MockNode(3, value)];
-      this.childNodes[0].parentNode = this;
-    }
-  }
-
-  class MockDocument {
-    createTextNode(text) { return new MockNode(3, text); }
-    createElement(tag) { return new MockNode(1, null, tag.toUpperCase()); }
-    createDocumentFragment() { return new MockNode(11); }
-    createTreeWalker(root, showWhat, filter) {
-      const nodes = [];
-      const visit = node => {
-        if (node.nodeType === 3) {
-          if (!filter || filter.acceptNode(node) !== NodeFilter.FILTER_SKIP) nodes.push(node);
-          return;
-        }
-        node.childNodes.forEach(visit);
-      };
-      visit(root);
-      let index = -1;
-      return {
-        currentNode: null,
-        nextNode() {
-          index += 1;
-          this.currentNode = nodes[index] || null;
-          return Boolean(this.currentNode);
-        }
-      };
-    }
-  }
-
   global.NodeFilter = { SHOW_TEXT: 4, FILTER_ACCEPT: 1, FILTER_REJECT: 2, FILTER_SKIP: 3 };
   const mockDocument = new MockDocument();
   const root = mockDocument.createElement('div');
@@ -156,7 +72,6 @@ const assert = require('node:assert');
   });
   assert.strictEqual(tokenized.spans.find(span => span.textContent === 'Hello').parentNode.tagName, 'EM');
   console.log('✓ Production DOM tokenization preserved hierarchy and character offsets.');
-
 
   console.log('\n--- 5. Production voice selection and rate math ---');
   const voices = tts.deduplicateAndSortVoices([
@@ -218,8 +133,8 @@ const assert = require('node:assert');
     'Final paragraph concluding our test scenario with 100% genuine code verification.'
   ].join('\n');
   const parsedHtml = parser.parseMarkdownToHtml(complexDocument);
-  assert(parsedHtml.includes('<h1 id="heading-0">Reader &amp; TTS Masterpiece</h1>'));
-  assert(parsedHtml.includes('<h2 id="heading-4">Feature Highlights</h2>'));
+  assert(parsedHtml.includes('<h1 id="reader-tts-masterpiece">Reader &amp; TTS Masterpiece</h1>'));
+  assert(parsedHtml.includes('<h2 id="feature-highlights">Feature Highlights</h2>'));
   assert(parsedHtml.includes('<strong>bold text</strong>'));
   assert(parsedHtml.includes('<em>italic words</em>'));
   assert(parsedHtml.includes('<a href="https://example.com/docs" target="_blank" rel="noopener noreferrer">Safe Link</a>'));

@@ -1,6 +1,7 @@
 'use strict';
 
-const CACHE_NAME = 'reader-webapp-shell-v11';
+// Bump CACHE_NAME whenever APP_SHELL files change so updates install into a fresh cache atomically.
+const CACHE_NAME = 'reader-webapp-shell-v12';
 const CACHE_PREFIX = 'reader-webapp-';
 const APP_SHELL = [
   './',
@@ -34,7 +35,6 @@ const APP_SHELL = [
 
 const ROOT_URL = new URL('./', self.registration.scope).href;
 const INDEX_URL = new URL('./index.html', self.registration.scope).href;
-const ROOT_URL_WITHOUT_TRAILING_SLASH = ROOT_URL.endsWith('/') ? ROOT_URL.slice(0, -1) : ROOT_URL;
 const APP_SHELL_URLS = new Set(APP_SHELL.map(path => new URL(path, self.registration.scope).href));
 const CANONICAL_NAVIGATION_URLS = new Set([ROOT_URL, INDEX_URL]);
 
@@ -43,7 +43,7 @@ function getRequestUrl(request) {
   url.hash = '';
   const withoutSearch = new URL(url.href);
   withoutSearch.search = '';
-  if (withoutSearch.href === ROOT_URL_WITHOUT_TRAILING_SLASH || withoutSearch.href === ROOT_URL) {
+  if (withoutSearch.href === ROOT_URL) {
     return ROOT_URL;
   }
   if (withoutSearch.href === INDEX_URL) {
@@ -100,7 +100,8 @@ async function navigationResponse(request) {
   const cache = await caches.open(CACHE_NAME);
 
   try {
-    const response = await fetch(request);
+    const fetchOptions = canonicalNavigation ? { cache: 'no-cache' } : undefined;
+    const response = await fetch(request, fetchOptions);
     if (response && response.ok) {
       await cacheCanonicalNavigation(cache, request, response);
       return response;
@@ -170,12 +171,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  if (isVendorRequest(request)) {
-    event.respondWith(staleWhileRevalidate(request, event));
-    return;
-  }
-
-  if (isCanonicalAppShellRequest(request)) {
+  if (isCanonicalAppShellRequest(request) || isVendorRequest(request)) {
     event.respondWith(staleWhileRevalidate(request, event));
   }
 });

@@ -51,7 +51,23 @@ function classList() {
   return {
     add(value) { values.add(value); },
     remove(value) { values.delete(value); },
-    contains(value) { return values.has(value); }
+    contains(value) { return values.has(value); },
+    toggle(value, force) {
+      if (force === true) {
+        values.add(value);
+        return true;
+      }
+      if (force === false) {
+        values.delete(value);
+        return false;
+      }
+      if (values.has(value)) {
+        values.delete(value);
+        return false;
+      }
+      values.add(value);
+      return true;
+    }
   };
 }
 
@@ -70,12 +86,19 @@ function classList() {
   function createFixture(isMobile) {
     const synth = new FakeSynth();
     const spans = Array.from({ length: 9 }, () => ({ classList: classList(), scrollIntoView() {} }));
+    const audioBarAttrs = { 'aria-hidden': 'true' };
+    const focusabilityLog = [];
+    const audioPlayerBar = {
+      classList: classList(),
+      setAttribute(name, value) { audioBarAttrs[name] = value; },
+      getAttribute(name) { return audioBarAttrs[name]; }
+    };
     const context = createAppContext({
-      readerContent: { querySelectorAll: () => [], contains: () => true },
+      readerContent: { classList: classList(), querySelectorAll: () => [], contains: () => true },
       voiceRateInput: { value: '1.0' },
       ttsBtn: null,
       ttsStopBtn: null,
-      audioPlayerBar: null,
+      audioPlayerBar,
       audioPlayPauseBtn: null,
       audioStopBtn: null,
       audioStatusText: null,
@@ -99,14 +122,23 @@ function classList() {
       { index: 8, text: 'dog', start: 40, end: 43, element: spans[8] }
     ];
     session.fullSpokenText = 'The quick brown fox jumps over the lazy dog';
-    const ui = { showStatus() {}, announceLive() {} };
+    const ui = {
+      showStatus() {},
+      announceLive() {},
+      setContainerFocusable(container, enabled) {
+        if (container === audioPlayerBar) focusabilityLog.push(enabled);
+      }
+    };
     const controller = createTTS(context, { ui });
-    return { controller, session, synth };
+    return { audioPlayerBar, controller, focusabilityLog, session, synth };
   }
 
   const desktop = createFixture(false);
   desktop.controller.startSpeech(0);
   assert.strictEqual(desktop.session.state, 'playing');
+  assert.strictEqual(desktop.audioPlayerBar.getAttribute('aria-hidden'), 'false', 'Active audio player bar should expose aria-hidden=false');
+  assert.strictEqual(desktop.focusabilityLog.at(-1), true, 'Active audio player bar should become focusable');
+  assert.strictEqual(desktop.session.wordSpans.length, 9);
   assert(desktop.session.keepAliveTimer);
   desktop.controller.pauseSpeech();
   assert.strictEqual(desktop.session.state, 'paused');
@@ -116,17 +148,30 @@ function classList() {
   assert.strictEqual(desktop.synth.history.at(-1).action, 'resume');
   desktop.controller.stopTTS();
   assert.strictEqual(desktop.session.state, 'idle');
+  assert.strictEqual(desktop.audioPlayerBar.getAttribute('aria-hidden'), 'true', 'Idle audio player bar should restore aria-hidden=true');
+  assert.strictEqual(desktop.focusabilityLog.at(-1), false, 'Idle audio player bar should remove controls from tab order');
+
+  // pageHideTimer lifecycle guards
+  desktop.controller.handlePageHide();
+  assert.strictEqual(desktop.session.pageHideTimer, null, 'handlePageHide while idle must not schedule a cancel timer');
+  desktop.controller.startSpeech(0);
+  desktop.controller.handlePageHide();
+  assert(desktop.session.pageHideTimer, 'handlePageHide while speaking should pause and schedule cancel timer');
+  desktop.controller.handlePageShow();
+  assert.strictEqual(desktop.session.pageHideTimer, null, 'handlePageShow must clear pending pageHideTimer');
+  desktop.controller.handlePageHide();
+  assert(desktop.session.pageHideTimer, 'handlePageHide while paused should schedule cancel timer');
+  desktop.controller.stopTTS();
+  assert.strictEqual(desktop.session.pageHideTimer, null, 'stopTTS must clear pending pageHideTimer');
 
   // Desktop long pause test (F-09)
   const longPauseDesktop = createFixture(false);
   longPauseDesktop.controller.startSpeech(0);
   longPauseDesktop.controller.pauseSpeech();
   assert.strictEqual(longPauseDesktop.session.state, 'paused');
-  // Simulate advancing clock by 20s
   longPauseDesktop.session.pausedAt = Date.now() - 20000;
   longPauseDesktop.controller.resumeSpeech();
   assert.strictEqual(longPauseDesktop.session.state, 'playing');
-  // Should call synth.cancel and synth.speak (restart path), NOT synth.resume
   const recentActions = longPauseDesktop.synth.history.slice(-2).map(h => h.action);
   assert(recentActions.includes('cancel') && recentActions.includes('speak'), `Expected cancel and speak on long pause restart, got: ${recentActions.join(', ')}`);
   assert(!recentActions.includes('resume'), 'Long pause resume should not invoke synth.resume');
@@ -160,30 +205,26 @@ function classList() {
   const announcementUI = { showStatus() {}, announceLive(msg) { announcements.push(msg); } };
   const announcementController = createTTS(announcementContext, { ui: announcementUI });
 
-  // While idle, invalidateTokenization must NOT announce
   announcementController.invalidateTokenization();
   assert.strictEqual(announcements.length, 0, `Expected 0 announcements while idle, got: ${announcements.length}`);
 
-  // Re-populate tokens for speech test
   announcementContext.runtime.tts.wordSpans = [
     { classList: classList(), scrollIntoView() {} }
   ];
   announcementContext.runtime.tts.wordMeta = [{ index: 0, text: 'Hello', start: 0, end: 5 }];
   announcementContext.runtime.tts.fullSpokenText = 'Hello';
 
-  // When speech starts and then stopTTS is called, it must announce exactly once
   announcementController.startSpeech(0);
   assert.strictEqual(announcements.filter(a => a === 'Text-to-speech started.').length, 1);
   announcementController.stopTTS();
   const stopAnnouncements = announcements.filter(a => a === 'Text-to-speech stopped.');
   assert.strictEqual(stopAnnouncements.length, 1, `Expected exactly 1 stop announcement, got: ${stopAnnouncements.length}`);
 
-  // Second stopTTS while already idle must NOT announce again
   announcementController.stopTTS();
   const secondStopCount = announcements.filter(a => a === 'Text-to-speech stopped.').length;
   assert.strictEqual(secondStopCount, 1, 'Second stopTTS while idle should not announce');
 
-  // Test voice select churn prevention (F-11)
+  // Test voice select churn prevention and late-arriving voices (F-11)
   let innerHtmlAssignCount = 0;
   const mockVoiceSelect = {
     value: '',
@@ -212,28 +253,21 @@ function classList() {
   voiceContext.runtime.tts.synth = voiceSynth;
   const voiceController = createTTS(voiceContext, { ui: { showStatus() {}, announceLive() {} } });
 
-  // First call populates options and sets innerHTML
-  voiceController.populateVoices();
-  assert.strictEqual(innerHtmlAssignCount, 1, `Expected innerHTML assigned once on first populate, got ${innerHtmlAssignCount}`);
+  voiceController.initializeVoices();
+  assert.strictEqual(innerHtmlAssignCount, 1, `Expected innerHTML assigned once on initial populate, got ${innerHtmlAssignCount}`);
   assert.strictEqual(voiceContext.runtime.tts.voices.length, 2);
+  assert.strictEqual(typeof voiceSynth.onvoiceschanged, 'function', 'onvoiceschanged should stay attached for late-arriving voices');
 
-  // Second call with identical voices must NOT re-render options (signature match)
-  voiceController.populateVoices();
+  voiceSynth.onvoiceschanged();
   assert.strictEqual(innerHtmlAssignCount, 1, `Expected innerHTML NOT reassigned when voice signature matches, got ${innerHtmlAssignCount}`);
 
-  // When voices actually change, innerHTML is reassigned
   voiceSynth.getVoices = () => [
     ...testVoices,
     { name: 'Victoria', lang: 'en-US', voiceURI: 'victoria-uri', default: false }
   ];
-  voiceController.populateVoices();
-  assert.strictEqual(innerHtmlAssignCount, 2, `Expected innerHTML reassigned when voices change, got ${innerHtmlAssignCount}`);
+  voiceSynth.onvoiceschanged();
+  assert.strictEqual(innerHtmlAssignCount, 2, `Expected innerHTML reassigned when late voices arrive, got ${innerHtmlAssignCount}`);
   assert.strictEqual(voiceContext.runtime.tts.voices.length, 3);
-
-  // onvoiceschanged detachment check
-  voiceSynth.onvoiceschanged = () => {};
-  voiceController.initializeVoices();
-  assert.strictEqual(voiceSynth.onvoiceschanged, null, 'Expected onvoiceschanged to be detached once voices are populated');
 
   // Test voice speed cycling (F-12)
   const speedRateInput = { value: '1.0' };
@@ -246,22 +280,18 @@ function classList() {
   });
   const speedController = createTTS(speedContext, { ui: { showStatus() {}, announceLive() {} } });
 
-  // Test current: 0.9 -> should advance to 1.0
   speedRateInput.value = '0.9';
   speedController.cycleVoiceSpeed();
   assert.strictEqual(speedRateInput.value, 1.0, `Expected 0.9 to advance to 1.0, got ${speedRateInput.value}`);
 
-  // Test current: 1.2 -> should advance to 1.5
   speedRateInput.value = '1.2';
   speedController.cycleVoiceSpeed();
   assert.strictEqual(speedRateInput.value, 1.5, `Expected 1.2 to advance to 1.5, got ${speedRateInput.value}`);
 
-  // Test current: 2.0 (maximum) -> should wrap around to 0.8
   speedRateInput.value = '2.0';
   speedController.cycleVoiceSpeed();
   assert.strictEqual(speedRateInput.value, 0.8, `Expected 2.0 to wrap around to 0.8, got ${speedRateInput.value}`);
 
-  // Test current: 2.4 (beyond maximum) -> should wrap around to 0.8
   speedRateInput.value = '2.4';
   speedController.cycleVoiceSpeed();
   assert.strictEqual(speedRateInput.value, 0.8, `Expected 2.4 to wrap around to 0.8, got ${speedRateInput.value}`);
@@ -292,9 +322,7 @@ function classList() {
   const estimateController = createTTS(estimateContext, { ui: { showStatus() {}, announceLive() {} } });
   estimateController.startSpeech(0);
   assert(estimateUtterance, 'Utterance must be created for speech');
-  // Trigger onstart without boundary events to activate estimateTimer
   estimateUtterance.onstart();
-  // Wait for estimate timer tick (120ms)
   await new Promise(resolve => setTimeout(resolve, 120));
   assert.strictEqual(estimateContext.runtime.tts.state, 'playing');
   assert(estimateContext.runtime.tts.currentWordIndex >= 0, 'Word highlight should advance via estimate timer');
