@@ -1,114 +1,163 @@
 # Reader Webapp
 
-A lightweight, local-first reader for copied text and Markdown. Paste content into the app, switch to a reading preset that feels comfortable, and optionally listen with your browser's text-to-speech engine.
+A lightweight, local-first browser reader for copied text and Markdown. Paste content into the app, choose a comfortable visual preset and typography setup, and optionally listen using your browser's text-to-speech engine.
 
 **Live app:** https://patelakash007.github.io/Reader-webapp/
 
-## What it does
+## Features
 
-- **Reads pasted text and Markdown.** Supports headings, paragraphs, emphasis, links, lists, blockquotes, code, and other common Markdown structures.
-- **Renders Markdown defensively.** Raw HTML is displayed as text, unsafe link targets are rejected, and Markdown images are represented by their alt text rather than loaded as images.
-- **Offers 20 reading presets.** Choose from 10 light and 10 dark presets, and move between presets using the controls or supported swipe gestures.
-- **Lets you tune typography.** Adjust text size, line height, letter spacing, and margins.
-- **Includes browser text-to-speech (TTS).** Use available system voices, adjust the speech rate, and follow narration with word highlighting and automatic scrolling. Voice availability and audio behavior depend on the browser and device.
-- **Works as an installable PWA.** On supported browsers, the app shell can be cached for offline reopening after the first successful visit.
-
-The app accepts up to **1,000,000 characters** of pasted text.
+- **Text & GitHub-Flavored Markdown rendering.** Powered by a vendored local copy of `marked` (v15.0.12) with support for headings (`h1`–`h6` with deduplicated slugified anchor IDs), automatic smart promotion of standalone uppercase headings, paragraphs, emphasis, links, nested and task lists, blockquotes, horizontal rules, inline/fenced code, and horizontally scrollable tables.
+- **Defensive sanitization by default.** Raw HTML is escaped and displayed as literal text, Markdown images render as `[Image: <alt>]` rather than fetching remote resources, and links only allow `http:`, `https:`, `ftp:`, `mailto:`, root-relative (`/`) paths, and `#` fragment anchors (`javascript:`, `data:`, `vbscript:`, `file:`, `blob:`, protocol-relative `//`, and control characters are rejected). External links open with `rel="noopener noreferrer"`.
+- **20 WCAG AA reading presets (10 Light, 10 Dark).**
+  - **Light:** Claude *(default)*, Zen, Stark, Book, Classic, Kindle, GitHub, Amber, Newspaper, Lavender.
+  - **Dark:** Night, Void, Carbon, Midnight, Obsidian, Dracula, Nord, Catppuccin, Forest, Ink.
+  - Presets use local system font stacks (`sans`, `serif`, `mono`), meet WCAG AA contrast (`>= 4.5:1`), dynamically update the browser `theme-color`, and cycle seamlessly across Light and Dark modes.
+- **Tunable typography & responsive reading layout.** Adjust text size (`S`, `M`, `L`, `XL`), line height (`1.4`–`2.6`), letter spacing (`-0.03em`–`0.15em`), and margins (`12px`–`80px`, capped on narrow viewports to preserve readability). Includes a top reading progress bar, an auto-hiding desktop toolbar, a 2-column tablet settings layout (`641px`–`960px`), and an accessible mobile bottom sheet (`<= 640px`) with focus trapping and scroll locking.
+- **Browser Text-to-Speech (TTS).** Uses the Web Speech API with lazy non-destructive DOM word tokenization, active word highlighting, reduced-motion-aware auto-scrolling, click-to-speak (when TTS is active or the Speech panel is open), voice selection, speed controls (`0.5x`–`2.5x` slider and floating player speed chip cycling `0.8x`–`2.0x`), 190-character boundary chunking, and fallback timing when browsers do not emit word-boundary events. Voice availability and audio behavior depend on the browser and OS.
+- **Incremental rendering for large pastes.** Accepts up to **1,000,000 characters** and renders Markdown tokens incrementally across animation frames so the UI remains responsive.
+- **Installable offline-capable PWA.** Caches the static application shell via a service worker (`sw.js`) for offline reopening after the first successful visit.
 
 ### Deliberately out of scope
 
-Reader Webapp is designed around pasted text and Markdown. It does **not** provide file uploads or PDF/DOCX extraction, an in-reader editor, bookmarks, exports, saved reading sessions, or persistent preferences. Clearing or reloading the app does not save your reading content or settings for later.
+Reader Webapp is intentionally focused on ephemeral pasted text and Markdown. It does **not** include file uploads or PDF/DOCX extraction, an in-reader editor, bookmarks, exports, accounts, or saved reading sessions/preferences. Reloading or clearing the page resets content and settings.
 
-## Use the app
+## Usage, Controls & Shortcuts
 
-1. Open the [live app](https://patelakash007.github.io/Reader-webapp/).
-2. Paste text or Markdown into the input area.
-3. Select **Read Text**.
-4. Change the theme and typography in Reading Settings. Open the Speech (TTS) section to listen when your browser supports speech synthesis.
+1. Open the [live app](https://patelakash007.github.io/Reader-webapp/) (or run locally).
+2. Paste plain text or Markdown into the input area and select **Read Text**.
+3. Open **Reading Settings** (auto-hiding top bar on desktop/tablet, floating settings button on mobile) to switch themes, adjust typography, or open **Speech (TTS)**.
 
-## Run locally
+### Keyboard shortcuts & gestures
 
-This is a static web app; there is no build step or backend required for normal use.
+| Input | Action |
+| --- | --- |
+| `ArrowLeft` / `ArrowRight` | Cycle to the previous or next preset (wraps across Light and Dark modes; ignored while focused on interactive form controls) |
+| `Enter` / `Space` *(on preset carousel)* | Re-apply the focused preset |
+| `Tab` *(desktop reader)* | Reveals the top toolbar if hidden |
+| `Escape` | Layered dismiss: closes the mobile settings sheet → blurs an active toolbar input → clears text selection → returns to the input view |
+| Swipe left / right *(touch devices)* | Cycle presets seamlessly across Light and Dark modes (blocked on code blocks, tables, interactive controls, and active text selections) |
+| Drag preset card | Drag horizontally in the preset carousel to switch presets |
+| Click / tap a word | Start TTS narration from that word when Speech (TTS) is open or playback is active |
+
+## Run Locally
+
+This is a static ES-module web app with no build step or backend required.
 
 ```bash
 git clone https://github.com/patelakash007/Reader-webapp.git
 cd Reader-webapp
-python -m http.server 8080
+python3 -m http.server 8080
 ```
 
 Open http://localhost:8080/ in your browser.
 
-Use a local server or the hosted app to test service-worker and PWA behavior. Opening `index.html` directly with a `file://` URL does not provide the same environment.
+> Use a local HTTP server (or the hosted HTTPS deployment) when testing ES modules, service worker caching, or PWA installation. Opening `index.html` directly via `file://` is not supported for module loading or service workers.
 
-## Project layout
+## Project Layout
 
 ```text
-reader-webapp/
-├── .github/workflows/quality-checks.yml  # CI hygiene, unit, regression and browser tests
-├── icons/                                # PWA icons
-├── scripts/                              # Syntax, browser, and PWA test helpers
-├── tests/                                # Unit, regression, stress, storage and PWA tests
+Reader-webapp/
+├── .github/workflows/quality-checks.yml  # CI hygiene, lint, PWA, unit, stress & Playwright suites
+├── docs/
+│   └── ARCHITECTURE.md                   # Detailed module, rendering, TTS & PWA architecture
+├── icons/                                # Standard and maskable PWA icons (192px, 512px)
+├── scripts/
+│   ├── browser-smoke-utils.js            # Local static server & Chromium launcher helpers
+│   ├── check-syntax.js                   # Syntax, ESM import & cross-module export checks
+│   ├── deep-playwright.js                # Full end-to-end desktop, mobile, TTS & offline checks
+│   ├── smoke-chromium.js                 # Lightweight headless Chromium DOM/screenshot smoke
+│   ├── smoke-playwright.js               # Desktop & mobile smoke checks via Playwright
+│   └── validate-pwa.js                   # Manifest, icon & sw.js APP_SHELL integrity checks
 ├── src/
-│   ├── app.mjs                           # Application initialization
-│   ├── markdown-parser.mjs               # Markdown parsing and safe rendering
-│   ├── reader.mjs                        # Reader flow and rendering coordination
-│   ├── reader-renderer.mjs               # Incremental DOM rendering
-│   ├── reader-navigation.mjs             # Reader and mobile settings navigation
-│   ├── settings.mjs                      # Themes and typography settings
-│   ├── tts-core.mjs                      # Speech text and tokenization helpers
-│   ├── tts-controller.mjs                # Speech playback state and controls
-│   └── ...                               # Shared state, UI and utility modules
-├── vendor/marked.esm.mjs                 # Local Markdown parser
-├── index.html                            # App shell and controls
-├── style.css                             # App styles
-├── script.js                             # Compatibility entry point
-├── sw.js                                 # Service worker
-├── manifest.webmanifest                  # PWA metadata
-├── package.json                          # Test commands and dev dependency
+│   ├── app.mjs                           # Application bootstrap & service worker registration
+│   ├── constants.mjs                     # Limits, 20 presets, theme colors, fonts & TTS constants
+│   ├── context.mjs                       # Shared app state and runtime session container
+│   ├── dom.mjs                           # DOM element collection
+│   ├── markdown-parser.mjs               # Marked config, sanitization, heading IDs & smart headings
+│   ├── parser.mjs                        # Parser facade & character-limit enforcement
+│   ├── preset-carousel.mjs               # Preset track drag, swipe gestures & keyboard helpers
+│   ├── reader-navigation.mjs             # Mobile bottom sheet dialog, focus trap & resize sync
+│   ├── reader-renderer.mjs               # Frame-budgeted incremental Markdown DOM rendering
+│   ├── reader.mjs                        # Reader lifecycle, scroll progress & global events
+│   ├── settings.mjs                      # Theme, font, typography & settings accordion controls
+│   ├── storage.mjs                       # Targeted cleanup of legacy reader_* storage keys
+│   ├── tts-controller.mjs                # Playback state machine, voice lifecycle & visibility handling
+│   ├── tts-core.mjs                      # 190-char chunking, voice sorting & DOM tokenization
+│   ├── tts.mjs                           # TTS module facade
+│   ├── ui.mjs                            # Status banners, loader, live announcer & focusability
+│   └── utils.mjs                         # Escaping, clamping, device detection & render cancellation
+├── tests/
+│   ├── mock_dom.js                       # Lightweight DOM mock for Node-based tests
+│   ├── test_empirical_stress.js          # Large-document & high-volume highlight performance tests
+│   ├── test_pwa.js                       # Service worker install, activate & fetch strategy tests
+│   ├── test_reader.js                    # Parser, chunking, voice & tokenization unit tests
+│   ├── test_regressions.js               # Comprehensive regression suite (Markdown, TTS, UI, A11y, CSS)
+│   ├── test_storage.js                   # Legacy storage cleanup & origin-isolation tests
+│   └── test_tts_controller.js            # TTS controller state machine & lifecycle tests
+├── vendor/marked.esm.mjs                 # Vendored marked v15.0.12 ESM bundle
+├── index.html                            # App shell markup & strict Content-Security-Policy
+├── style.css                             # Themes, responsive layouts & reduced-motion styles
+├── script.js                             # Deferred entry point importing src/app.mjs
+├── sw.js                                 # Offline app-shell service worker
+├── manifest.webmanifest                  # PWA web app manifest
+├── .eslintrc.json                        # Pinned ESLint 8.57.1 configuration
+├── package.json                          # Test/lint scripts and dev dependencies
+├── CONTRIBUTING.md                       # Scope guidelines, checklists & PR workflow
+├── LICENSE                               # MIT License
 └── README.md
 ```
 
-## Tests
+## Testing & Quality Checks
 
-Node.js is required. Install the development dependency first:
+Node.js (v22 in CI) is required to run the automated test and lint suites. Install the pinned development dependencies (`eslint@8.57.1` and `playwright-core@1.60.0`) first:
 
 ```bash
 npm ci
 ```
 
-Run the main checks:
+Run the core non-browser suite:
 
 ```bash
 npm test
 ```
 
-This runs syntax/import validation, PWA app-shell validation, PWA service worker behavior tests, unit and regression tests, empirical stress tests, and browser-storage cleanup regression tests. CI also runs the pinned ESLint check and browser smoke/deep-regression suites.
-
-Additional checks are available:
+### Available npm scripts
 
 | Command | What it checks |
 | --- | --- |
-| `npm run test:pwa` | PWA app-shell validation and service-worker behavior |
-| `npm run test:regressions` | Regression test suite including storage isolation checks |
-| `npm run test:smoke` | Browser smoke tests and basic reader interactions |
-| `npm run test:deep` | Deeper browser regression checks |
-| `npm run test:chromium` | Lightweight Chromium-only smoke test |
-| `npm run test:storage` | Legacy browser-storage cleanup and data-isolation regression test |
-| `npm run lint` | ESLint check using pinned ESLint 8.57.1 |
+| `npm test` | Runs syntax/import validation, PWA validation & SW behavior tests, unit tests, regressions, empirical stress tests, and storage isolation tests |
+| `npm run test:syntax` | JavaScript syntax (`node --check`), ESM import targets/exports, and cross-module missing-import checks |
+| `npm run test:pwa` | Web manifest, icon, `sw.js` `APP_SHELL` completeness, and service worker caching behavior |
+| `npm run test:unit` | Core reader/TTS unit tests, TTS controller lifecycle tests, regression suite, and storage isolation tests |
+| `npm run test:regressions` | Full regression suite and legacy storage cleanup tests |
+| `npm run test:empirical` | Large-document parsing and high-volume word-highlight lookup benchmarks |
+| `npm run test:storage` | Legacy browser-storage cleanup and same-origin key isolation tests |
+| `npm run lint` | Pinned ESLint (`8.57.1`) checks across `script.js`, `sw.js`, `src/`, `scripts/`, and `tests/` |
+| `npm run test:smoke` | Playwright desktop & mobile smoke tests, ES module fetch verification, and mobile FAB clearance |
+| `npm run test:deep` | Deep Playwright end-to-end checks (sanitization, carousel drag, typography, TTS lifecycle, offline SW reload, mobile sheet flow) |
+| `npm run test:chromium` | Lightweight headless Chromium DOM and screenshot smoke check (no Playwright required) |
 
-The browser tests need Playwright and a compatible browser executable. The scripts look for `BROWSER_EXE`, `PLAYWRIGHT_CHROMIUM_EXECUTABLE`, or `CHROMIUM_EXECUTABLE` if a browser is not found automatically. CI installs Chromium and runs the browser checks.
+### Running browser tests locally
 
-Browser-test screenshots, HTML captures, and logs are written under `output/browser-smoke/` and are not intended as source files.
+Install Playwright's Chromium binary once:
 
-## Privacy and offline behavior
+```bash
+npx playwright-core install --with-deps chromium
+```
 
-Pasted content is processed in the browser; the app has no application backend for receiving or storing reading text. Reading content and settings are not persisted across reloads. The app uses local assets and does not rely on third-party font or script CDNs.
+If you prefer an existing local Chromium, Chrome, or Edge executable, set `BROWSER_EXE`, `PLAYWRIGHT_CHROMIUM_EXECUTABLE`, or `CHROMIUM_EXECUTABLE`. Browser test screenshots, HTML dumps, and JSON reports are written to `output/browser-smoke/` (gitignored).
 
-The service worker caches the static application shell, including the HTML, styles, JavaScript modules, Markdown parser, manifest, and icons. It does not intentionally store pasted reading content as an offline document. Avoid entering sensitive information into any website unless you trust the device, browser session, and hosting environment.
+## Privacy, Security & Offline Behavior
 
-## Contributing
+- **Local-only processing.** Pasted text stays in the browser; there is no application backend or analytics.
+- **No persistence.** Reading text and settings are kept in memory only and reset on reload. On startup, [`cleanupLegacyBrowserStorage`](src/storage.mjs) removes known legacy `reader_*` keys from `localStorage` and `sessionStorage` while leaving any unrelated keys on the same origin intact.
+- **Strict CSP & zero CDNs.** `index.html` enforces a strict `Content-Security-Policy` (`default-src 'self'`, `object-src 'none'`, `form-action 'none'`), and CI rejects any CDN URLs in application source files.
+- **Service worker scope.** `sw.js` precaches the static application shell (HTML, CSS, JS/ESM modules, vendored Markdown parser, manifest, and icons) for offline reopening. It does not cache or persist pasted reading content. As with any web app, avoid entering sensitive data on untrusted devices or browser sessions.
 
-Keep changes focused and consistent with the app's pasted-text/Markdown scope. Create a branch, run the relevant tests, inspect the diff, and open a pull request against `main`.
+## Further Documentation
+
+- [Architecture Guide](docs/ARCHITECTURE.md) — Module graph, rendering pipeline, TTS internals, accessibility, and service worker lifecycle.
+- [Contributing Guide](CONTRIBUTING.md) — Scope guardrails, development setup, maintenance checklists, and CI requirements.
 
 ## License
 
