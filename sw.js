@@ -1,7 +1,7 @@
 'use strict';
 
 // Bump CACHE_NAME whenever APP_SHELL files change so updates install into a fresh cache atomically.
-const CACHE_NAME = 'reader-webapp-shell-v12';
+const CACHE_NAME = 'reader-webapp-shell-v13';
 const CACHE_PREFIX = 'reader-webapp-';
 const APP_SHELL = [
   './',
@@ -119,7 +119,7 @@ async function navigationResponse(request) {
 
 async function staleWhileRevalidate(request, event) {
   const cache = await caches.open(CACHE_NAME);
-  const cacheKey = isCanonicalAppShellRequest(request) ? getRequestUrl(request) : request;
+  const cacheKey = getRequestUrl(request);
   const cached = await cache.match(cacheKey);
   const networkUpdate = fetch(request, { cache: 'no-cache' })
     .then(async response => {
@@ -132,13 +132,7 @@ async function staleWhileRevalidate(request, event) {
   event.waitUntil(networkUpdate.catch(() => undefined));
 
   if (cached) return cached;
-  return networkUpdate;
-}
-
-function isVendorRequest(request) {
-  if (!isSameOriginGet(request)) return false;
-  const url = new URL(request.url);
-  return url.href.startsWith(self.registration.scope) && url.pathname.includes('/vendor/');
+  return networkUpdate.catch(() => Response.error());
 }
 
 self.addEventListener('install', event => {
@@ -171,7 +165,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  if (isCanonicalAppShellRequest(request) || isVendorRequest(request)) {
+  if (isCanonicalAppShellRequest(request)) {
     event.respondWith(staleWhileRevalidate(request, event));
   }
 });

@@ -175,7 +175,7 @@ export function createPresetCarousel(context, { getPresets, applyPreset, setMode
     const element = getElementTarget(target);
     if (!element) return false;
     return Boolean(element.closest([
-      'a', 'button', 'input', 'select', 'textarea', 'label', 'pre', 'code', 'table', '[contenteditable]',
+      'a', 'button', 'input', 'select', 'textarea', 'label', 'pre', 'code', 'table', '.table-wrap', '[contenteditable]',
       '[role="button"]', '[role="link"]', '[role="slider"]', '[role="textbox"]', '[role="combobox"]',
       '[role="checkbox"]', '[role="radio"]', '#toolbar', '.audio-player-bar', '#backBtn'
     ].join(',')));

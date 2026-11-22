@@ -55,9 +55,27 @@ const missing = requiredPaths.filter(relativePath => {
 });
 
 const serviceWorkerSource = fs.readFileSync(path.join(rootDir, 'sw.js'), 'utf8');
-const missingFromAppShell = moduleGraph.filter(relativePath => !serviceWorkerSource.includes(`'./${relativePath}'`));
+const appShellBlockMatch = serviceWorkerSource.match(/const\s+APP_SHELL\s*=\s*\[([\s\S]*?)\];/);
+if (!appShellBlockMatch) {
+  console.error('Could not locate APP_SHELL array in sw.js.');
+  process.exit(1);
+}
+const appShellEntries = [...appShellBlockMatch[1].matchAll(/['"]([^'"]+)['"]/g)].map(match => match[1]);
+const appShellSet = new Set(appShellEntries);
+
+const expectedShellAssets = requiredPaths.filter(relativePath => relativePath !== 'sw.js');
+const missingFromAppShell = expectedShellAssets.filter(relativePath => !appShellSet.has(`./${relativePath}`));
 if (missingFromAppShell.length > 0) {
-  console.error(`Service worker app shell is missing modules: ${missingFromAppShell.join(', ')}`);
+  console.error(`Service worker APP_SHELL is missing required assets: ${missingFromAppShell.join(', ')}`);
+  process.exit(1);
+}
+
+const staleAppShellEntries = appShellEntries
+  .filter(entry => entry !== './')
+  .map(entry => entry.replace(/^\.\//, ''))
+  .filter(relativePath => !fs.existsSync(path.join(rootDir, relativePath)));
+if (staleAppShellEntries.length > 0) {
+  console.error(`Service worker APP_SHELL references missing files: ${staleAppShellEntries.join(', ')}`);
   process.exit(1);
 }
 

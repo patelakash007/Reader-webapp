@@ -39,15 +39,20 @@ export function createUI(context) {
     if (els.loader) els.loader.classList.remove('active');
   }
 
+  function getDoc() {
+    return context.doc || (typeof document !== 'undefined' ? document : null);
+  }
+
   function announceLive(msg) {
-    if (typeof document === 'undefined' || !document.body) return;
-    let live = document.getElementById('liveAnnouncer');
+    const doc = getDoc();
+    if (!doc || !doc.body) return;
+    let live = doc.getElementById('liveAnnouncer');
     if (!live) {
-      live = document.createElement('div');
+      live = doc.createElement('div');
       live.id = 'liveAnnouncer';
       live.className = 'sr-only';
       live.setAttribute('aria-live', 'polite');
-      document.body.appendChild(live);
+      doc.body.appendChild(live);
     }
     if (announceTimer !== null) {
       clearTimeout(announceTimer);
@@ -62,6 +67,17 @@ export function createUI(context) {
 
   function setContainerFocusable(container, enabled) {
     if (!container) return;
+    if ('inert' in container) {
+      container.inert = !enabled;
+    }
+    if (container === els.toolbar) {
+      if (enabled && typeof container.removeAttribute === 'function') {
+        container.removeAttribute('aria-hidden');
+      } else if (!enabled && typeof container.setAttribute === 'function') {
+        container.setAttribute('aria-hidden', 'true');
+      }
+    }
+    if (typeof container.querySelectorAll !== 'function') return;
     container.querySelectorAll('button, input, [tabindex], select').forEach(element => {
       if (enabled) {
         if (element.dataset.savedTabindex !== undefined) {

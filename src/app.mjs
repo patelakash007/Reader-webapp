@@ -9,7 +9,7 @@ import { createUI } from './ui.mjs';
 
 const initializedDocuments = new WeakSet();
 
-function registerServiceWorker() {
+function registerServiceWorker(documentObject) {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
 
   const register = () => {
@@ -19,7 +19,7 @@ function registerServiceWorker() {
       });
   };
 
-  if (typeof document !== 'undefined' && document.readyState === 'complete') register();
+  if (documentObject && documentObject.readyState === 'complete') register();
   else if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('load', register, { once: true });
   }
@@ -30,7 +30,7 @@ export function init(documentObject = document) {
   initializedDocuments.add(documentObject);
 
   const els = collectElements(documentObject);
-  const context = createAppContext(els);
+  const context = createAppContext(els, documentObject);
   const ui = createUI(context);
   const tts = createTTS(context, { ui });
   const parser = createParser();
@@ -47,7 +47,7 @@ export function init(documentObject = document) {
   });
 
   cleanupLegacyBrowserStorage();
-  registerServiceWorker();
+  registerServiceWorker(documentObject);
   settings.bindEvents();
   reader.bindEvents();
   tts.bindEvents();

@@ -1,8 +1,9 @@
 import { STATE_IDLE } from './constants.mjs';
 import { isMobileDevice } from './utils.mjs';
 
-export function createAppContext(els) {
+export function createAppContext(els, doc = null) {
   return {
+    doc,
     els,
     state: {
       currentText: '',

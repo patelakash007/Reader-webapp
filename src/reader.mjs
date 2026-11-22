@@ -23,6 +23,10 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
     toggleMobileSheet
   } = navigation;
 
+  function getDoc() {
+    return context.doc || (typeof document !== 'undefined' ? document : null);
+  }
+
   function resetToolbarTimer() {
     if (!els.toolbar) return;
     if (isMobileSheetLayout()) {
@@ -37,7 +41,8 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
       if (isPointerOverToolbar) return;
       state.toolbarTimer = window.setTimeout(() => {
         if (isPointerOverToolbar) return;
-        if (typeof document !== 'undefined' && els.toolbar.contains(document.activeElement)) return;
+        const doc = getDoc();
+        if (doc && els.toolbar.contains(doc.activeElement)) return;
         els.toolbar.classList.add('hidden-bar');
         ui.setContainerFocusable(els.toolbar, false);
       }, 3500);
@@ -52,23 +57,25 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
   function isClickToSpeakEnabled(session) {
     if (!session || !session.supported) return false;
     if (session.isSpeaking) return true;
+    const doc = getDoc();
     const listenSection = Array.isArray(els.settingsSections)
       ? els.settingsSections.find(section => section && typeof section.getAttribute === 'function' && section.getAttribute('data-settings-section') === 'listen')
-      : (typeof document !== 'undefined' && typeof document.querySelector === 'function'
-        ? document.querySelector('[data-settings-section="listen"]')
+      : (doc && typeof doc.querySelector === 'function'
+        ? doc.querySelector('[data-settings-section="listen"]')
         : null);
     return Boolean(listenSection && listenSection.classList && listenSection.classList.contains('is-open'));
   }
 
   function enterReader() {
+    const doc = getDoc();
     isPointerOverToolbar = false;
     if (els.inputView) els.inputView.classList.add('hidden');
     if (els.readerView) els.readerView.classList.add('active');
     if (els.backBtn) els.backBtn.classList.add('show');
     if (els.toolbar) els.toolbar.classList.remove('hidden-bar', 'expanded');
     if (els.sheetBackdrop) els.sheetBackdrop.classList.remove('show');
-    if (typeof document !== 'undefined' && document.body) {
-      document.body.classList.remove('mobile-sheet-active');
+    if (doc && doc.body) {
+      doc.body.classList.remove('mobile-sheet-active');
     }
     if (els.mobileFab) {
       els.mobileFab.classList.add('reader-active');
@@ -86,7 +93,12 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
   }
 
   function goBack() {
+    const doc = getDoc();
     isPointerOverToolbar = false;
+    if (typeof window !== 'undefined' && window.clearTimeout) {
+      window.clearTimeout(state.toolbarTimer);
+      state.toolbarTimer = null;
+    }
     cancelPendingRender(context, { clearContent: true });
     if (tts && typeof tts.stopTTS === 'function') {
       tts.stopTTS();
@@ -106,8 +118,8 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
       els.toolbar.classList.remove('expanded');
     }
     if (els.sheetBackdrop) els.sheetBackdrop.classList.remove('show');
-    if (typeof document !== 'undefined' && document.body) {
-      document.body.classList.remove('mobile-sheet-active');
+    if (doc && doc.body) {
+      doc.body.classList.remove('mobile-sheet-active');
     }
     if (els.mobileFab) {
       els.mobileFab.classList.remove('active', 'reader-active');
@@ -177,9 +189,10 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
     const executeProgress = () => {
       scrollProgressPending = false;
       if (!els.readerView || !els.readerView.classList.contains('active') || !els.progressBar) return;
+      const doc = getDoc();
       const winScroll = getScrollTop();
-      const docHeight = typeof document !== 'undefined' && document.documentElement ? document.documentElement.scrollHeight : 0;
-      const clientHeight = typeof document !== 'undefined' && document.documentElement ? document.documentElement.clientHeight : 0;
+      const docHeight = doc && doc.documentElement ? doc.documentElement.scrollHeight : 0;
+      const clientHeight = doc && doc.documentElement ? doc.documentElement.clientHeight : 0;
       const height = docHeight - clientHeight;
       const scrolled = height > 0 ? (winScroll / height) * 100 : 0;
       els.progressBar.style.width = `${scrolled}%`;
@@ -192,9 +205,22 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
     }
   }
 
+  function shouldRevealToolbarOnTap(target) {
+    if (!els.readerView || !els.readerView.classList.contains('active') || !els.toolbar) return false;
+    if (els.toolbar.contains(target)) return false;
+    if (els.backBtn && els.backBtn.contains(target)) return false;
+    if (els.mobileFab && els.mobileFab.contains(target)) return false;
+    if (els.sheetBackdrop && els.sheetBackdrop.contains(target)) return false;
+    if (els.audioPlayerBar && typeof els.audioPlayerBar.contains === 'function' && els.audioPlayerBar.contains(target)) return false;
+    const element = getElementTarget(target);
+    if (element && typeof element.closest === 'function' && element.closest('a[href^="#"]')) return false;
+    return true;
+  }
+
   function bindEvents() {
     if (initialized) return;
     initialized = true;
+    const doc = getDoc();
     if (els.readBtn) els.readBtn.addEventListener('click', loadFromPaste);
     if (els.clearBtn) els.clearBtn.addEventListener('click', clearText);
     if (els.backBtn) els.backBtn.addEventListener('click', goBack);
@@ -216,8 +242,9 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
         let currentTarget = target;
         if (!session.wordMeta.length) {
           tts.tokenize();
-          if (typeof document !== 'undefined' && typeof document.elementFromPoint === 'function' && typeof event.clientX === 'number' && typeof event.clientY === 'number') {
-            const el = document.elementFromPoint(event.clientX, event.clientY);
+          const currentDoc = getDoc();
+          if (currentDoc && typeof currentDoc.elementFromPoint === 'function' && typeof event.clientX === 'number' && typeof event.clientY === 'number') {
+            const el = currentDoc.elementFromPoint(event.clientX, event.clientY);
             if (el) currentTarget = el;
           }
         }
@@ -251,14 +278,14 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
       });
       els.toolbar.addEventListener('focusout', resetToolbarTimer);
     }
-    if (typeof document !== 'undefined') {
-      document.addEventListener('click', event => {
-        if (els.readerView && els.readerView.classList.contains('active') && els.toolbar && !els.toolbar.contains(event.target) && els.backBtn && !els.backBtn.contains(event.target) && els.mobileFab && !els.mobileFab.contains(event.target) && els.sheetBackdrop && !els.sheetBackdrop.contains(event.target)) resetToolbarTimer();
+    if (doc && typeof doc.addEventListener === 'function') {
+      doc.addEventListener('click', event => {
+        if (shouldRevealToolbarOnTap(event.target)) resetToolbarTimer();
       });
-      document.addEventListener('touchstart', event => {
-        if (els.readerView && els.readerView.classList.contains('active') && els.toolbar && !els.toolbar.contains(event.target) && els.backBtn && !els.backBtn.contains(event.target) && els.mobileFab && !els.mobileFab.contains(event.target) && els.sheetBackdrop && !els.sheetBackdrop.contains(event.target)) resetToolbarTimer();
+      doc.addEventListener('touchstart', event => {
+        if (shouldRevealToolbarOnTap(event.target)) resetToolbarTimer();
       }, { passive: true });
-      document.addEventListener('mousemove', event => {
+      doc.addEventListener('mousemove', event => {
         if (
           els.readerView &&
           els.readerView.classList.contains('active') &&
@@ -271,7 +298,7 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
           resetToolbarTimer();
         }
       }, { passive: true });
-      document.addEventListener('keydown', event => {
+      doc.addEventListener('keydown', event => {
         if (!els.readerView || !els.readerView.classList.contains('active')) return;
         if (event.key === 'Tab' && els.toolbar && els.toolbar.classList.contains('hidden-bar') && !isMobileSheetLayout()) {
           resetToolbarTimer();
@@ -281,7 +308,8 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
             collapseMobileSheet();
             return;
           }
-          const activeEl = typeof document !== 'undefined' ? document.activeElement : null;
+          const currentDoc = getDoc();
+          const activeEl = currentDoc ? currentDoc.activeElement : null;
           const isToolbarFormControl = Boolean(
             activeEl &&
             els.toolbar &&

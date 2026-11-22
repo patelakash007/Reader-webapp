@@ -135,15 +135,35 @@ export function tokenizeReaderDOM(containerElement, documentObject = document) {
   let trailingNewlines = 0;
   let pendingBreak = '';
 
+  function isImmediatelyAfterBr(node, stopAncestor) {
+    let cur = node;
+    while (cur && cur !== stopAncestor) {
+      let prev = cur.previousSibling;
+      while (prev) {
+        if (prev.nodeType === 1 && prev.tagName && prev.tagName.toUpperCase() === 'BR') {
+          return true;
+        }
+        if (prev.nodeType === 3) {
+          if (prev.nodeValue && prev.nodeValue.trim()) return false;
+        } else if (prev.nodeType === 1) {
+          if (prev.textContent && prev.textContent.trim()) return false;
+        }
+        prev = prev.previousSibling;
+      }
+      cur = cur.parentNode;
+    }
+    return false;
+  }
+
   textNodes.forEach(textNode => {
     const text = textNode.nodeValue;
     if (!text) return;
 
-    const afterBr = Boolean(
-      textNode.previousSibling &&
-      textNode.previousSibling.tagName &&
-      textNode.previousSibling.tagName.toUpperCase() === 'BR'
-    );
+    const parentBlock = textNode.parentElement
+      ? textNode.parentElement.closest('p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, td, th, tr, table')
+      : null;
+
+    const afterBr = isImmediatelyAfterBr(textNode, parentBlock || containerElement);
 
     if (!text.trim()) {
       if (currentLen > 0) {
@@ -155,10 +175,6 @@ export function tokenizeReaderDOM(containerElement, documentObject = document) {
       }
       return;
     }
-
-    const parentBlock = textNode.parentElement
-      ? textNode.parentElement.closest('p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, td, th, tr, table')
-      : null;
 
     if (parentBlock && lastBlockElement && parentBlock !== lastBlockElement) {
       if (trailingNewlines < 2) {

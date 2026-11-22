@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Reader Webapp - Minimal Text &amp; Markdown Reader</title>
 <meta name="description" content="A minimal personal reader for copied text and Markdown with visual presets, swipe gestures, and TTS speech synthesis.">
-<meta name="theme-color" content="#9a3524">
+<meta name="theme-color" content="#faf8f5">
 <meta name="application-name" content="Reader Webapp">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -25,7 +25,8 @@
 
   <button class="mobile-fab" id="mobileFab" type="button" aria-label="Open Reading Settings" aria-controls="toolbar" aria-expanded="false"><span aria-hidden="true">&#x1F39B;&#xFE0F;</span></button>
 
-  <main id="inputView">
+  <main>
+  <section id="inputView" aria-label="Text input">
     <h1 class="brand">Reader</h1>
     <div class="subtitle">Paste copied text or Markdown to start reading</div>
     <textarea class="paste-area" id="pasteArea" aria-label="Text to read" placeholder="Paste text here..." autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
@@ -34,7 +35,7 @@
       <button class="btn btn-secondary" id="clearBtn" type="button">Clear</button>
     </div>
     <div class="status-message" id="statusMessage" role="status" aria-live="polite"></div>
-  </main>
+  </section>
 
   <section id="readerView" aria-label="Reader view">
     <button class="back-btn" id="backBtn" type="button" aria-label="Go Back"><span aria-hidden="true">&#8592;</span></button>
@@ -156,6 +157,7 @@
       </div>
     </div>
   </section>
+  </main>
 
   <div id="gestureHint">
     <div class="gesture-hint-text" id="gestureHintText">Swipe left / right</div>

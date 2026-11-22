@@ -71,8 +71,7 @@ export function isSmartHeading(trimmed) {
   if (typeof trimmed !== 'string' || trimmed.length < 4 || trimmed.length > 55) return false;
   if (/[\r\n]/.test(trimmed)) return false;
   if (!/^[A-Z][A-Z0-9 \t:—–-]{2,55}[A-Z0-9]$/.test(trimmed)) return false;
-  if (/^[A-Z0-9]{2,6}(?:[ \t]+(?:AND|OR|&|\/)[ \t]+[A-Z0-9]{2,6})+$/i.test(trimmed)) return false;
-  if (/[.!?]$/.test(trimmed)) return false;
+  if (/^[A-Z0-9]{2,6}(?:[ \t]+(?:AND|OR)[ \t]+[A-Z0-9]{2,6})+$/i.test(trimmed)) return false;
   if (/^(?:PLEASE|NOTE|WARNING|CAUTION|DO NOT|NOTICE)\b/i.test(trimmed)) return false;
   const words = trimmed.split(/[ \t]+/);
   return words.some(w => w.length >= 4) || words.length >= 2;
@@ -122,6 +121,25 @@ export function createMarkedInstance() {
       },
       html(token) {
         return escapeHtml(token.text);
+      },
+      table(token) {
+        let header = '';
+        let cell = '';
+        for (let j = 0; j < token.header.length; j += 1) {
+          cell += this.tablecell(token.header[j]);
+        }
+        header += this.tablerow({ text: cell });
+        let body = '';
+        for (let j = 0; j < token.rows.length; j += 1) {
+          const row = token.rows[j];
+          cell = '';
+          for (let k = 0; k < row.length; k += 1) {
+            cell += this.tablecell(row[k]);
+          }
+          body += this.tablerow({ text: cell });
+        }
+        if (body) body = `<tbody>${body}</tbody>`;
+        return `<div class="table-wrap"><table>\n<thead>\n${header}</thead>\n${body}</table></div>\n`;
       },
       list(token) {
         const tag = token.ordered ? 'ol' : 'ul';

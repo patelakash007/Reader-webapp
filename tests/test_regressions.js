@@ -36,6 +36,7 @@ function withSavedGlobals(keys, fn) {
   const { createReader } = await import('../src/reader.mjs');
   const { createSettings } = await import('../src/settings.mjs');
   const { createPresetCarousel } = await import('../src/preset-carousel.mjs');
+  const { createUI } = await import('../src/ui.mjs');
   const { init } = await import('../src/app.mjs');
 
   const makeClassList = (initial = []) => {
@@ -1379,6 +1380,7 @@ function withSavedGlobals(keys, fn) {
       ['text2/bg', vars['--text2'], vars['--bg']],
       ['text2/card', vars['--text2'], vars['--card']],
       ['accent/bg', vars['--accent'], vars['--bg']],
+      ['accent/card', vars['--accent'], vars['--card']],
       ['on-accent/accent', vars['--on-accent'], vars['--accent']],
       ['ui-positive/card', vars['--ui-positive'], vars['--card']],
       ['ui-negative/card', vars['--ui-negative'], vars['--card']]
@@ -1388,6 +1390,9 @@ function withSavedGlobals(keys, fn) {
       assert(ratio >= 4.5, `Theme "${name}" failed WCAG AA contrast on ${label} (${fg} vs ${bg}): ${ratio.toFixed(2)}:1`);
     });
   });
+  assert(styleCss.includes('scroll-margin-top: var(--reader-toolbar-offset)'), 'Headings must declare scroll-margin-top to avoid toolbar occlusion');
+  assert(styleCss.includes('.reader-content .table-wrap') && !/\.reader-content table\s*\{[^}]*display:\s*block/i.test(styleCss), 'Tables must scroll via .table-wrap instead of display:block');
+  assert(/<main>[\s\S]*id="inputView"[\s\S]*id="readerView"[\s\S]*<\/main>/.test(indexHtml), 'Both input and reader views must live inside a persistent <main> landmark');
   console.log('✓ All 20 CSS themes pass >= 4.5:1 WCAG AA contrast and CSP hardening checks.');
 
   console.log('\n--- 51. App Init: WeakSet guard supports distinct documents without double-init ---');
@@ -1443,6 +1448,204 @@ function withSavedGlobals(keys, fn) {
     assert(second && second.reader, 'init(docB) on a distinct mock document must initialize cleanly');
   });
   console.log('✓ App init WeakSet guard verified across distinct documents.');
+
+  console.log('\n--- 52. TTS: <br> before inline formatting, paused external cancel, invalid charIndex, and voice lookup ---');
+  withSavedGlobals(['NodeFilter', 'SpeechSynthesisUtterance', 'document'], () => {
+    global.NodeFilter = { SHOW_TEXT: 4, FILTER_ACCEPT: 1, FILTER_REJECT: 2, FILTER_SKIP: 3 };
+    const brDoc = new MockDocument();
+    const brRoot = brDoc.createElement('article');
+    const brP = brDoc.createElement('p');
+    brP.appendChild(brDoc.createTextNode('First line'));
+    brP.appendChild(brDoc.createElement('br'));
+    const brStrong = brDoc.createElement('strong');
+    brStrong.appendChild(brDoc.createTextNode('Second line'));
+    brP.appendChild(brStrong);
+    brRoot.appendChild(brP);
+    const brTok = tts.tokenizeReaderDOM(brRoot, brDoc);
+    assert.strictEqual(brTok.text, 'First line\nSecond line', `<br> before inline element must insert newline, got: ${JSON.stringify(brTok.text)}`);
+
+    global.SpeechSynthesisUtterance = class MockUtterance {
+      constructor(text) {
+        this.text = text;
+        this.rate = 1;
+        this.pitch = 1;
+      }
+    };
+    global.document = { hidden: false, addEventListener() {}, createElement: () => ({}) };
+    let lastUtterance = null;
+    let speakCount = 0;
+    let resumeCount = 0;
+    const cancelSynth = {
+      speaking: false,
+      paused: false,
+      speak(u) {
+        speakCount += 1;
+        this.speaking = true;
+        lastUtterance = u;
+        if (u.onstart) u.onstart();
+      },
+      pause() { this.paused = true; },
+      resume() { resumeCount += 1; this.paused = false; },
+      cancel() { this.speaking = false; this.paused = false; },
+      getVoices: () => [
+        { name: 'Voice Zero', lang: 'en-US', voiceURI: 'v0', default: true },
+        { name: 'Voice One', lang: 'en-US', voiceURI: 'v1', default: false }
+      ]
+    };
+    const voiceSelectEl = { value: '1_removed_uri', innerHTML: '', appendChild() {} };
+    const ctx52 = createAppContext({
+      readerContent: { classList: makeClassList(), querySelectorAll: () => [], contains: () => true },
+      voiceRateInput: { value: '1.0' },
+      voiceSelect: voiceSelectEl
+    });
+    ctx52.runtime.tts.supported = true;
+    ctx52.runtime.tts.synth = cancelSynth;
+    ctx52.runtime.tts.isMobile = false;
+    ctx52.runtime.tts.voices = cancelSynth.getVoices();
+    ctx52.runtime.tts.wordSpans = [
+      { classList: makeClassList(), scrollIntoView() {} },
+      { classList: makeClassList(), scrollIntoView() {} }
+    ];
+    ctx52.runtime.tts.wordMeta = [
+      { index: 0, text: 'Hello', start: 0, end: 5 },
+      { index: 1, text: 'world', start: 6, end: 11 }
+    ];
+    ctx52.runtime.tts.fullSpokenText = 'Hello world';
+    const ctrl52 = tts.createTTS(ctx52, { ui: mockUI });
+
+    ctrl52.startSpeech(0);
+    // Voice URI starting with digit must fall back to index 0, not parseInt('1_removed_uri') === 1
+    assert.strictEqual(lastUtterance.voice.voiceURI, 'v0', 'Removed voiceURI starting with digit must not parseInt-match another voice');
+
+    // Invalid onboundary charIndex must not disable fallback estimate timer
+    assert(ctx52.runtime.tts.estimateTimer, 'Estimate timer should be running before valid boundary event');
+    lastUtterance.onboundary({ name: 'word', charIndex: undefined });
+    assert.strictEqual(ctx52.runtime.tts.chunkHasBoundary, false, 'Invalid charIndex must not mark chunkHasBoundary');
+    assert(ctx52.runtime.tts.estimateTimer, 'Invalid charIndex must not stop estimate timer');
+
+    // External cancel while paused must force restartFromWord on resume instead of dead synth.resume()
+    ctrl52.pauseSpeech();
+    assert.strictEqual(ctx52.runtime.tts.state, 'paused');
+    lastUtterance.onerror({ error: 'canceled' });
+    assert.strictEqual(ctx52.runtime.tts.visibilityInterrupted, true, 'External cancel while paused must mark session dirty');
+    const speaksBeforeResume = speakCount;
+    ctrl52.resumeSpeech();
+    assert.strictEqual(speakCount, speaksBeforeResume + 1, 'Resuming after external cancel while paused must restart utterance');
+    assert.strictEqual(resumeCount, 0, 'Resuming after external cancel while paused must not call dead synth.resume()');
+    ctrl52.stopTTS();
+  });
+  console.log('✓ TTS <br>+inline separation, paused cancel recovery, charIndex guard, and voice fallback verified.');
+
+  console.log('\n--- 53. UI/A11y: Dynamic theme-color, toolbar inert/aria-hidden, mobile Close FAB trap, and tap/timer guards ---');
+  withSavedGlobals(['window', 'document'], () => {
+    const metaAttrs = { content: '#faf8f5' };
+    const docListeners = {};
+    const bodyClasses = makeClassList();
+    let clearedTimerIds = [];
+    let activeEl = null;
+    const mockDoc53 = {
+      body: { classList: bodyClasses },
+      documentElement: { style: { setProperty() {} } },
+      get activeElement() { return activeEl; },
+      querySelector: sel => (sel === 'meta[name="theme-color"]'
+        ? { setAttribute(k, v) { metaAttrs[k] = v; } }
+        : null),
+      querySelectorAll: () => [],
+      addEventListener(evt, fn) { docListeners[evt] = fn; },
+      removeEventListener(evt, fn) { if (docListeners[evt] === fn) delete docListeners[evt]; },
+      contains: () => true
+    };
+    global.document = mockDoc53;
+    global.window = {
+      matchMedia: () => ({ matches: true }),
+      setTimeout: () => 777,
+      clearTimeout: id => { clearedTimerIds.push(id); },
+      getSelection: () => null,
+      addEventListener() {}
+    };
+
+    const handleBtn = { focused: false, offsetParent: {}, focus() { this.focused = true; activeEl = this; }, dataset: {}, hasAttribute: () => false, setAttribute() {}, removeAttribute() {} };
+    const fabBtn = { focused: false, offsetParent: {}, classList: makeClassList(['reader-active']), setAttribute() {}, addEventListener() {}, contains: () => false, focus() { this.focused = true; activeEl = this; } };
+    const toolbarAttrs = {};
+    const toolbarEl = {
+      inert: false,
+      scrollTop: 0,
+      classList: makeClassList(),
+      setAttribute(k, v) { toolbarAttrs[k] = v; },
+      removeAttribute(k) { delete toolbarAttrs[k]; },
+      querySelectorAll: () => [handleBtn],
+      addEventListener() {},
+      removeEventListener() {},
+      contains: el => el === handleBtn
+    };
+    const audioBarEl = { contains: el => el === 'audio-child' };
+    const ctx53 = createAppContext({
+      readerView: { classList: makeClassList(['active']) },
+      inputView: { classList: makeClassList(['hidden']) },
+      toolbar: toolbarEl,
+      backBtn: { classList: makeClassList(), contains: () => false, addEventListener() {} },
+      sheetBackdrop: { classList: makeClassList(), contains: () => false, addEventListener() {} },
+      mobileFab: fabBtn,
+      audioPlayerBar: audioBarEl,
+      pasteArea: { value: '', addEventListener() {} },
+      presetTrack: { classList: makeClassList(), style: {}, querySelectorAll: () => [] },
+      presetDots: { querySelectorAll: () => [] },
+      presetWindow: { setAttribute() {}, addEventListener() {} },
+      themeSettingsSummary: { textContent: '' }
+    }, mockDoc53);
+
+    const settings53 = createSettings(ctx53, { onResetToolbarTimer() {}, isMobileSheetLayout: () => true });
+    settings53.setMode('dark', { presetIndex: 1, resetTimer: false }); // Void (#000000)
+    assert.strictEqual(metaAttrs.content, '#000000', 'Switching to Void dark theme must update meta[name=theme-color] to #000000');
+
+    const ui53 = createUI(ctx53);
+    const reader53 = createReader(ctx53, {
+      ui: ui53,
+      parser: mockParser,
+      tts: mockTTS,
+      getSettings: () => settings53
+    });
+    reader53.bindEvents();
+
+    // Expanding mobile sheet includes active mobileFab ("Close") in Tab focus trap
+    reader53.expandMobileSheet();
+    assert.strictEqual(handleBtn.focused, true, 'First visible control inside sheet should receive focus');
+    assert.strictEqual(toolbarEl.inert, false, 'Expanded sheet must not be inert');
+    assert.strictEqual(toolbarAttrs['aria-hidden'], undefined, 'Expanded sheet must not be aria-hidden');
+
+    // Shift+Tab from first element wraps to mobileFab ("Close")
+    let prevented = false;
+    activeEl = handleBtn;
+    docListeners.keydown({ key: 'Tab', shiftKey: true, preventDefault() { prevented = true; } });
+    assert.strictEqual(prevented, true, 'Shift+Tab on first focusable must wrap inside dialog');
+    assert.strictEqual(fabBtn.focused, true, 'Mobile Close FAB must be reachable in dialog focus trap');
+
+    // Collapsing sheet sets inert and aria-hidden
+    reader53.collapseMobileSheet();
+    assert.strictEqual(toolbarEl.inert, true, 'Collapsed sheet must be inert');
+    assert.strictEqual(toolbarAttrs['aria-hidden'], 'true', 'Collapsed sheet must set aria-hidden=true');
+
+    // goBack clears pending toolbarTimer
+    ctx53.state.toolbarTimer = 777;
+    reader53.goBack();
+    assert(clearedTimerIds.includes(777), 'goBack must clear pending toolbarTimer');
+    assert.strictEqual(ctx53.state.toolbarTimer, null, 'goBack must null out state.toolbarTimer');
+
+    // Clicking anchor links or audioPlayerBar must not reveal desktop toolbar
+    global.window.matchMedia = () => ({ matches: false });
+    ctx53.els.readerView.classList.add('active');
+    toolbarEl.classList.add('hidden-bar');
+    docListeners.click({ target: 'audio-child' });
+    assert.strictEqual(toolbarEl.classList.contains('hidden-bar'), true, 'Clicking audioPlayerBar must not reveal top toolbar');
+    docListeners.click({ target: { nodeType: 1, closest: sel => (sel === 'a[href^="#"]' ? {} : null) } });
+    assert.strictEqual(toolbarEl.classList.contains('hidden-bar'), true, 'Clicking an in-page anchor link must not reveal top toolbar');
+  });
+  console.log('✓ Dynamic theme-color, toolbar inert/aria-hidden, mobile Close FAB trap, and tap/timer guards verified.');
+
+  console.log('\n--- 54. Markdown: Tables render inside scrollable .table-wrap container ---');
+  const wrappedTableHtml = parser.parseMarkdownToHtml('| A | B |\n|---|---|\n| 1 | 2 |');
+  assert(wrappedTableHtml.includes('<div class="table-wrap"><table>') && wrappedTableHtml.includes('</table></div>'), `Tables must be wrapped in .table-wrap: ${wrappedTableHtml}`);
+  console.log('✓ Markdown tables render inside .table-wrap container.');
 
   console.log('\n====================================================');
   console.log('ALL REGRESSION TESTS PASSED SUCCESSFULLY');

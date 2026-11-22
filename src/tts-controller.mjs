@@ -18,11 +18,16 @@ export function createTTS(context, { ui }) {
   const session = runtime.tts;
   let initialized = false;
 
+  function getDoc() {
+    return context.doc || (typeof document !== 'undefined' ? document : null);
+  }
+
   function isListenSectionOpen() {
+    const doc = getDoc();
     const listenSection = Array.isArray(els.settingsSections)
       ? els.settingsSections.find(section => section && typeof section.getAttribute === 'function' && section.getAttribute('data-settings-section') === 'listen')
-      : (typeof document !== 'undefined' && typeof document.querySelector === 'function'
-        ? document.querySelector('[data-settings-section="listen"]')
+      : (doc && typeof doc.querySelector === 'function'
+        ? doc.querySelector('[data-settings-section="listen"]')
         : null);
     return Boolean(listenSection && listenSection.classList && listenSection.classList.contains('is-open'));
   }
@@ -136,7 +141,8 @@ export function createTTS(context, { ui }) {
 
   function tokenize() {
     clearHighlight();
-    const result = tokenizeReaderDOM(els.readerContent);
+    const doc = getDoc();
+    const result = doc ? tokenizeReaderDOM(els.readerContent, doc) : tokenizeReaderDOM(els.readerContent);
     session.wordSpans = result.spans;
     session.wordMeta = result.meta;
     session.fullSpokenText = result.text;
@@ -163,13 +169,16 @@ export function createTTS(context, { ui }) {
     session.voicesSignature = signature;
     session.voices = sorted;
     const previousSelection = els.voiceSelect.value || '';
+    const doc = getDoc();
     els.voiceSelect.innerHTML = '';
-    session.voices.forEach((voice, index) => {
-      const option = document.createElement('option');
-      option.value = voice.voiceURI || String(index);
-      option.textContent = `${voice.name} (${voice.lang})${voice.default ? ' — default' : ''}`;
-      els.voiceSelect.appendChild(option);
-    });
+    if (doc && typeof doc.createElement === 'function') {
+      session.voices.forEach((voice, index) => {
+        const option = doc.createElement('option');
+        option.value = voice.voiceURI || String(index);
+        option.textContent = `${voice.name} (${voice.lang})${voice.default ? ' — default' : ''}`;
+        els.voiceSelect.appendChild(option);
+      });
+    }
     const userLanguage = (typeof navigator !== 'undefined' && navigator.language) || 'en-US';
     const selectedIndex = resolveVoiceIndex(session.voices, previousSelection, userLanguage);
     if (selectedIndex >= 0) els.voiceSelect.value = session.voices[selectedIndex].voiceURI || String(selectedIndex);
@@ -189,8 +198,14 @@ export function createTTS(context, { ui }) {
 
   function getSelectedVoice() {
     if (!session.voices.length || !els.voiceSelect) return null;
-    const value = els.voiceSelect.value;
-    return session.voices.find(voice => voice.voiceURI === value) || session.voices[parseInt(value, 10)] || session.voices[0] || null;
+    const value = String(els.voiceSelect.value ?? '');
+    const byUri = session.voices.find(voice => voice.voiceURI === value);
+    if (byUri) return byUri;
+    if (/^\d+$/.test(value)) {
+      const byIndex = session.voices[Number(value)];
+      if (byIndex) return byIndex;
+    }
+    return session.voices[0] || null;
   }
 
   function stopEstimateTimer() {
@@ -324,6 +339,7 @@ export function createTTS(context, { ui }) {
 
     utterance.onboundary = event => {
       if (generation !== session.speechGeneration || (event.name && event.name !== 'word')) return;
+      if (typeof event.charIndex !== 'number' || !Number.isFinite(event.charIndex) || event.charIndex < 0) return;
       session.chunkHasBoundary = true;
       stopEstimateTimer();
       highlightAtIndex(chunk.start + event.charIndex);
@@ -347,6 +363,7 @@ export function createTTS(context, { ui }) {
       if (event.error === 'interrupted' || event.error === 'canceled') {
         stopEstimateTimer();
         if (session.state === STATE_PLAYING) finishSpeech();
+        else if (session.state === STATE_PAUSED) session.visibilityInterrupted = true;
         return;
       }
       if (event.error === 'not-allowed' || session.state !== STATE_IDLE) {
@@ -512,7 +529,8 @@ export function createTTS(context, { ui }) {
   }
 
   function handleVisibilityChange() {
-    if (typeof document !== 'undefined' && document.hidden) {
+    const doc = getDoc();
+    if (doc && doc.hidden) {
       if (session.state === STATE_PLAYING) {
         session.visibilityInterrupted = true;
         stopEstimateTimer();
@@ -557,9 +575,14 @@ export function createTTS(context, { ui }) {
       });
     }
     if (session.supported && session.synth) {
-      window.addEventListener('pagehide', handlePageHide);
-      window.addEventListener('pageshow', handlePageShow);
-      document.addEventListener('visibilitychange', handleVisibilityChange);
+      if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+        window.addEventListener('pagehide', handlePageHide);
+        window.addEventListener('pageshow', handlePageShow);
+      }
+      const doc = getDoc();
+      if (doc && typeof doc.addEventListener === 'function') {
+        doc.addEventListener('visibilitychange', handleVisibilityChange);
+      }
     }
   }
 

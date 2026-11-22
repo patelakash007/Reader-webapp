@@ -273,6 +273,30 @@ async function testNonCanonicalNavigationDoesNotUseAppShellWhenOffline() {
   assert.equal(response.status, 0, 'non-canonical navigation should return a network error rather than the cached app shell');
 }
 
+async function testUncachedAppShellOfflineReturnsErrorResponse() {
+  resetRuntime();
+  cachesByName.set(CURRENT_CACHE_NAME, new FakeCache());
+  queueFetch(new Error('offline'));
+
+  const request = new FakeRequest('https://reader.example.test/style.css');
+  const event = makeEvent({ request });
+  eventHandlers.get('fetch')(event);
+  const response = await event.responses[0];
+  await drainWaitUntil();
+
+  assert.equal(response.status, 0, 'uncached offline app shell request should resolve to Response.error()');
+}
+
+async function testUnknownVendorPathIsNotIntercepted() {
+  resetRuntime();
+  cachesByName.set(CURRENT_CACHE_NAME, new FakeCache());
+  const request = new FakeRequest('https://reader.example.test/vendor/unknown-extra.js?v=1');
+  const event = makeEvent({ request });
+  eventHandlers.get('fetch')(event);
+
+  assert.equal(event.responses.length, 0, 'non-APP_SHELL vendor requests should not be intercepted or cached');
+}
+
 async function run() {
   const tests = [
     ['versioned cache install/activate', testInstallAndActivateVersionedCaches],
@@ -281,7 +305,9 @@ async function run() {
     ['vendor offline fallback', testVendorOfflineFallback],
     ['navigation fallback on HTTP error', testCanonicalNavigationFallsBackOnServerError],
     ['non-canonical navigation preserves HTTP error', testNonCanonicalNavigationKeepsServerError],
-    ['non-canonical navigation does not mask offline errors', testNonCanonicalNavigationDoesNotUseAppShellWhenOffline]
+    ['non-canonical navigation does not mask offline errors', testNonCanonicalNavigationDoesNotUseAppShellWhenOffline],
+    ['uncached offline app shell returns error response', testUncachedAppShellOfflineReturnsErrorResponse],
+    ['unknown vendor path is not intercepted', testUnknownVendorPathIsNotIntercepted]
   ];
 
   for (const [name, test] of tests) {

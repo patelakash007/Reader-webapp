@@ -2,7 +2,7 @@
 
 A lightweight, local-first reader for copied text and Markdown. Paste content into the app, switch to a reading preset that feels comfortable, and optionally listen with your browser's text-to-speech engine.
 
-**Live app:** https://patelakash007.github.io/reader-webapp/
+**Live app:** https://patelakash007.github.io/Reader-webapp/
 
 ## What it does
 
@@ -21,7 +21,7 @@ Reader Webapp is designed around pasted text and Markdown. It does **not** provi
 
 ## Use the app
 
-1. Open the [live app](https://patelakash007.github.io/reader-webapp/).
+1. Open the [live app](https://patelakash007.github.io/Reader-webapp/).
 2. Paste text or Markdown into the input area.
 3. Select **Read Text**.
 4. Change the theme and typography in Reading Settings. Open the Speech (TTS) section to listen when your browser supports speech synthesis.
@@ -31,8 +31,8 @@ Reader Webapp is designed around pasted text and Markdown. It does **not** provi
 This is a static web app; there is no build step or backend required for normal use.
 
 ```bash
-git clone https://github.com/patelakash007/reader-webapp.git
-cd reader-webapp
+git clone https://github.com/patelakash007/Reader-webapp.git
+cd Reader-webapp
 python -m http.server 8080
 ```
 

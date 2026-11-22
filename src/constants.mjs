@@ -19,6 +19,29 @@ export const VALID_THEMES = new Set([
   'dark', 'void', 'carbon', 'midnight', 'obsidian', 'dracula', 'nord', 'catppuccin', 'forest', 'ink'
 ]);
 
+export const THEME_COLORS = {
+  claude: '#faf8f5',
+  zen: '#ffffff',
+  stark: '#ffffff',
+  paper: '#faf8f3',
+  cream: '#fbfaf8',
+  kindle: '#f4ecd8',
+  github: '#ffffff',
+  amber: '#fffbeb',
+  newspaper: '#f0ece0',
+  lavender: '#f5f0ff',
+  dark: '#1a1a1a',
+  void: '#000000',
+  carbon: '#121212',
+  midnight: '#0a0a0f',
+  obsidian: '#1e1e1e',
+  dracula: '#282a36',
+  nord: '#2e3440',
+  catppuccin: '#1e1e2e',
+  forest: '#1c2e1c',
+  ink: '#0f172a'
+};
+
 export const lightPresets = [
   { name: 'Claude', font: 'sans', theme: 'claude', desc: 'Clean warm system sans' },
   { name: 'Zen', font: 'sans', theme: 'zen', desc: 'Pure minimal white' },

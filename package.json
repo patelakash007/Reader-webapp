@@ -13,10 +13,11 @@
     "test:deep": "node scripts/deep-playwright.js",
     "test:chromium": "node scripts/smoke-chromium.js",
     "test": "node scripts/check-syntax.js && node scripts/validate-pwa.js && node tests/test_pwa.js && node tests/test_reader.js && node tests/test_tts_controller.js && node tests/test_regressions.js && node tests/test_empirical_stress.js && node tests/test_storage.js",
-    "lint": "npx --yes eslint@8.57.1 --ext .js,.mjs script.js sw.js src scripts tests",
+    "lint": "eslint --ext .js,.mjs script.js sw.js src scripts tests",
     "test:storage": "node tests/test_storage.js"
   },
   "devDependencies": {
+    "eslint": "8.57.1",
     "playwright-core": "1.60.0"
   }
 }

@@ -1,4 +1,5 @@
 import {
+  THEME_COLORS,
   VALID_FONTS,
   VALID_SIZES,
   VALID_THEMES,
@@ -12,6 +13,10 @@ import { createPresetCarousel } from './preset-carousel.mjs';
 export function createSettings(context, { onResetToolbarTimer, isMobileSheetLayout }) {
   const { els, state, runtime } = context;
   let initialized = false;
+
+  function getDoc() {
+    return context.doc || (typeof document !== 'undefined' ? document : null);
+  }
 
   function getPresets() {
     return state.currentMode === 'dark' ? darkPresets : lightPresets;
@@ -42,19 +47,27 @@ export function createSettings(context, { onResetToolbarTimer, isMobileSheetLayo
     const nextFont = VALID_FONTS.has(font) ? font : 'sans';
     const config = fontMap[nextFont];
     if (!config) return;
-    if (typeof document !== 'undefined' && document.documentElement?.style) {
-      document.documentElement.style.setProperty('--body-font', config.family);
-      document.documentElement.style.setProperty('--heading-weight', config.weight);
+    const doc = getDoc();
+    if (doc && doc.documentElement?.style) {
+      doc.documentElement.style.setProperty('--body-font', config.family);
+      doc.documentElement.style.setProperty('--heading-weight', config.weight);
     }
   }
 
   function setTheme(theme) {
     const nextTheme = VALID_THEMES.has(theme) ? theme : 'claude';
-    if (typeof document !== 'undefined' && document.body?.classList) {
-      Array.from(document.body.classList)
+    const doc = getDoc();
+    if (doc && doc.body?.classList) {
+      Array.from(doc.body.classList)
         .filter(className => className.startsWith('theme-'))
-        .forEach(className => document.body.classList.remove(className));
-      document.body.classList.add(`theme-${nextTheme}`);
+        .forEach(className => doc.body.classList.remove(className));
+      doc.body.classList.add(`theme-${nextTheme}`);
+    }
+    if (doc && typeof doc.querySelector === 'function' && THEME_COLORS[nextTheme]) {
+      const themeColorMeta = doc.querySelector('meta[name="theme-color"]');
+      if (themeColorMeta && typeof themeColorMeta.setAttribute === 'function') {
+        themeColorMeta.setAttribute('content', THEME_COLORS[nextTheme]);
+      }
     }
   }
 
@@ -92,20 +105,24 @@ export function createSettings(context, { onResetToolbarTimer, isMobileSheetLayo
     const nextSize = VALID_SIZES.has(size) ? size : 'medium';
     els.readerContent.classList.remove('fs-small', 'fs-medium', 'fs-large', 'fs-xl');
     els.readerContent.classList.add(`fs-${nextSize}`);
-    document.querySelectorAll('[data-size]').forEach(button => {
-      const active = button.getAttribute('data-size') === nextSize;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-pressed', active ? 'true' : 'false');
-    });
+    const doc = getDoc();
+    if (doc && typeof doc.querySelectorAll === 'function') {
+      doc.querySelectorAll('[data-size]').forEach(button => {
+        const active = button.getAttribute('data-size') === nextSize;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+    }
   }
 
   function setSettingsSectionExpanded(section, expanded) {
     if (!section) return;
     const isExpanded = Boolean(expanded);
+    const doc = getDoc();
     const toggle = typeof section.querySelector === 'function' ? section.querySelector('.settings-section-toggle') : null;
     const panelId = toggle ? toggle.getAttribute('aria-controls') : '';
-    const panel = panelId && typeof document !== 'undefined' && typeof document.getElementById === 'function'
-      ? document.getElementById(panelId)
+    const panel = panelId && doc && typeof doc.getElementById === 'function'
+      ? doc.getElementById(panelId)
       : (typeof section.querySelector === 'function' ? section.querySelector('.settings-section-panel') : null);
     section.classList.toggle('is-open', isExpanded);
     if (toggle) toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
@@ -174,10 +191,11 @@ export function createSettings(context, { onResetToolbarTimer, isMobileSheetLayo
   function bindEvents() {
     if (initialized) return;
     initialized = true;
+    const doc = getDoc();
     if (els.modeLight) els.modeLight.addEventListener('click', () => setMode('light'));
     if (els.modeDark) els.modeDark.addEventListener('click', () => setMode('dark'));
-    if (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
-      document.querySelectorAll('[data-size]').forEach(button => {
+    if (doc && typeof doc.querySelectorAll === 'function') {
+      doc.querySelectorAll('[data-size]').forEach(button => {
         button.addEventListener('click', () => setSize(button.getAttribute('data-size')));
       });
     }
@@ -190,10 +208,10 @@ export function createSettings(context, { onResetToolbarTimer, isMobileSheetLayo
     }
     if (els.presetWindow) {
       els.presetWindow.addEventListener('touchstart', event => {
-        if (event.touches.length === 1 && canStartCarouselDrag(event.target)) startCarouselDrag(event.touches[0].clientX);
+        if (event.touches && event.touches.length === 1 && canStartCarouselDrag(event.target)) startCarouselDrag(event.touches[0].clientX);
       }, { passive: true });
       els.presetWindow.addEventListener('touchmove', event => {
-        if (state.isDraggingCarousel) state.dragCurrentX = event.touches[0].clientX;
+        if (state.isDraggingCarousel && event.touches && event.touches.length === 1) state.dragCurrentX = event.touches[0].clientX;
       }, { passive: true });
       els.presetWindow.addEventListener('touchend', endCarouselDrag, { passive: true });
       els.presetWindow.addEventListener('touchcancel', endCarouselDrag, { passive: true });

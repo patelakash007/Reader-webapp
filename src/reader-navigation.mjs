@@ -1,12 +1,50 @@
 export function createReaderNavigation(context, { ui, getSettings, resetToolbarTimer }) {
   const { els, state, runtime } = context;
   let sheetFocusTrapListener = null;
+  let sheetFocusTrapTarget = null;
+
+  const FOCUSABLE_SELECTOR = [
+    'button:not([disabled]):not([tabindex="-1"])',
+    '[href]:not([tabindex="-1"])',
+    'input:not([disabled]):not([tabindex="-1"])',
+    'select:not([disabled]):not([tabindex="-1"])',
+    'textarea:not([disabled]):not([tabindex="-1"])',
+    '[tabindex]:not([tabindex="-1"])'
+  ].join(', ');
+
+  function getDoc() {
+    return context.doc || (typeof document !== 'undefined' ? document : null);
+  }
+
+  function isElementVisible(el) {
+    if (!el) return false;
+    if (el.hidden) return false;
+    if ('offsetParent' in el) return el.offsetParent !== null;
+    return true;
+  }
+
+  function getSheetFocusables() {
+    if (!els.toolbar || typeof els.toolbar.querySelectorAll !== 'function') return [];
+    const focusables = Array.from(els.toolbar.querySelectorAll(FOCUSABLE_SELECTOR)).filter(isElementVisible);
+    if (
+      els.mobileFab &&
+      els.mobileFab.classList &&
+      els.mobileFab.classList.contains('active') &&
+      !els.mobileFab.disabled &&
+      isElementVisible(els.mobileFab) &&
+      !focusables.includes(els.mobileFab)
+    ) {
+      focusables.push(els.mobileFab);
+    }
+    return focusables;
+  }
 
   function isMobileSheetLayout() {
     return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
   }
 
   function stripMobileSheetOverlayState() {
+    const doc = getDoc();
     if (els.toolbar) {
       els.toolbar.classList.remove('expanded');
       if (typeof els.toolbar.removeAttribute === 'function') {
@@ -14,14 +52,15 @@ export function createReaderNavigation(context, { ui, getSettings, resetToolbarT
         els.toolbar.removeAttribute('role');
         els.toolbar.removeAttribute('aria-label');
       }
-      if (sheetFocusTrapListener && typeof els.toolbar.removeEventListener === 'function') {
-        els.toolbar.removeEventListener('keydown', sheetFocusTrapListener);
-        sheetFocusTrapListener = null;
-      }
+    }
+    if (sheetFocusTrapListener && sheetFocusTrapTarget && typeof sheetFocusTrapTarget.removeEventListener === 'function') {
+      sheetFocusTrapTarget.removeEventListener('keydown', sheetFocusTrapListener);
+      sheetFocusTrapListener = null;
+      sheetFocusTrapTarget = null;
     }
     if (els.sheetBackdrop) els.sheetBackdrop.classList.remove('show');
-    if (typeof document !== 'undefined' && document.body) {
-      document.body.classList.remove('mobile-sheet-active');
+    if (doc && doc.body) {
+      doc.body.classList.remove('mobile-sheet-active');
     }
     if (els.mobileFab) {
       els.mobileFab.classList.remove('active');
@@ -39,7 +78,8 @@ export function createReaderNavigation(context, { ui, getSettings, resetToolbarT
   }
 
   function expandMobileSheet() {
-    runtime.reader.lastActiveElement = typeof document !== 'undefined' ? document.activeElement : null;
+    const doc = getDoc();
+    runtime.reader.lastActiveElement = doc ? doc.activeElement : null;
     if (typeof window !== 'undefined' && window.clearTimeout) {
       window.clearTimeout(state.toolbarTimer);
     }
@@ -54,8 +94,8 @@ export function createReaderNavigation(context, { ui, getSettings, resetToolbarT
     }
     if (els.sheetBackdrop) els.sheetBackdrop.classList.add('show');
     ui.setContainerFocusable(els.toolbar, true);
-    if (isMobileSheetLayout() && typeof document !== 'undefined' && document.body) {
-      document.body.classList.add('mobile-sheet-active');
+    if (isMobileSheetLayout() && doc && doc.body) {
+      doc.body.classList.add('mobile-sheet-active');
       if (els.toolbar) els.toolbar.scrollTop = 0;
     }
     if (els.mobileFab) {
@@ -67,9 +107,7 @@ export function createReaderNavigation(context, { ui, getSettings, resetToolbarT
     }
 
     if (els.toolbar && typeof els.toolbar.querySelectorAll === 'function') {
-      const focusableElements = Array.from(els.toolbar.querySelectorAll(
-        'button:not([disabled]):not([tabindex="-1"]), [href]:not([tabindex="-1"]), input:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])'
-      ));
+      const focusableElements = getSheetFocusables();
       if (focusableElements.length > 0) {
         try { focusableElements[0].focus(); } catch (err) {}
       }
@@ -78,38 +116,39 @@ export function createReaderNavigation(context, { ui, getSettings, resetToolbarT
         sheetFocusTrapListener = event => {
           if (!els.toolbar || !els.toolbar.classList.contains('expanded')) return;
           if (event.key === 'Tab') {
-            const focusables = Array.from(els.toolbar.querySelectorAll(
-              'button:not([disabled]):not([tabindex="-1"]), [href]:not([tabindex="-1"]), input:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])'
-            )).filter(el => el.offsetParent !== null);
+            const focusables = getSheetFocusables();
             if (!focusables.length) return;
+            const active = doc ? doc.activeElement : null;
             const first = focusables[0];
             const last = focusables[focusables.length - 1];
+            const insideDialog = Boolean(active && focusables.includes(active));
             if (event.shiftKey) {
-              if (document.activeElement === first || !els.toolbar.contains(document.activeElement)) {
+              if (active === first || !insideDialog) {
                 event.preventDefault();
                 last.focus();
               }
-            } else {
-              if (document.activeElement === last || !els.toolbar.contains(document.activeElement)) {
-                event.preventDefault();
-                first.focus();
-              }
+            } else if (active === last || !insideDialog) {
+              event.preventDefault();
+              first.focus();
             }
           }
         };
-        if (typeof els.toolbar.addEventListener === 'function') {
-          els.toolbar.addEventListener('keydown', sheetFocusTrapListener);
+        const listenerTarget = (doc && typeof doc.addEventListener === 'function') ? doc : els.toolbar;
+        if (listenerTarget && typeof listenerTarget.addEventListener === 'function') {
+          listenerTarget.addEventListener('keydown', sheetFocusTrapListener);
+          sheetFocusTrapTarget = listenerTarget;
         }
       }
     }
   }
 
   function collapseMobileSheet() {
+    const doc = getDoc();
     stripMobileSheetOverlayState();
     ui.setContainerFocusable(els.toolbar, false);
     if (els.toolbar) els.toolbar.scrollTop = 0;
     if (els.mobileFab) {
-      const targetFocus = (runtime.reader.lastActiveElement && typeof document !== 'undefined' && document.contains(runtime.reader.lastActiveElement))
+      const targetFocus = (runtime.reader.lastActiveElement && doc && typeof doc.contains === 'function' && doc.contains(runtime.reader.lastActiveElement))
         ? runtime.reader.lastActiveElement
         : els.mobileFab;
       try { targetFocus.focus(); } catch (err) {}
