@@ -170,11 +170,29 @@ function startStaticServer(port = 0) {
       resolve({
         server,
         url: `http://127.0.0.1:${actualPort}/`,
-        reusedExistingServer: false,
         close: () => new Promise(done => server.close(done))
       });
     });
   });
+}
+
+function loadPlaywright() {
+  for (const packageName of ['playwright-core', 'playwright']) {
+    try {
+      return { packageName, module: require(packageName) };
+    } catch (error) {
+      if (error.code !== 'MODULE_NOT_FOUND') throw error;
+    }
+  }
+  return null;
+}
+
+function getAppModuleFiles() {
+  const srcDir = path.join(rootDir, 'src');
+  return [
+    ...fs.readdirSync(srcDir).filter(file => file.endsWith('.mjs')).sort().map(file => `./src/${file}`),
+    './vendor/marked.esm.mjs'
+  ];
 }
 
 async function waitForServer(url, timeoutMs = 5000) {
@@ -207,7 +225,9 @@ module.exports = {
   browserEnvVars,
   ensureOutputDir,
   findBrowserExecutable,
+  getAppModuleFiles,
   launchChromiumWithFallback,
+  loadPlaywright,
   outputDir,
   rootDir,
   startStaticServer,

@@ -10,27 +10,16 @@ import {
   VOICE_POLL_TIMEOUT,
   WORDS_PER_MIN
 } from './constants.mjs';
-import { clampNumber } from './utils.mjs';
+import { clampNumber, getDoc, isListenSectionOpen } from './utils.mjs';
 import { chunkText, deduplicateAndSortVoices, resolveVoiceIndex, tokenizeReaderDOM } from './tts-core.mjs';
+
+const ICON_PLAY = '<svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
+const ICON_PAUSE = '<svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
 
 export function createTTS(context, { ui }) {
   const { els, runtime } = context;
   const session = runtime.tts;
   let initialized = false;
-
-  function getDoc() {
-    return context.doc || (typeof document !== 'undefined' ? document : null);
-  }
-
-  function isListenSectionOpen() {
-    const doc = getDoc();
-    const listenSection = Array.isArray(els.settingsSections)
-      ? els.settingsSections.find(section => section && typeof section.getAttribute === 'function' && section.getAttribute('data-settings-section') === 'listen')
-      : (doc && typeof doc.querySelector === 'function'
-        ? doc.querySelector('[data-settings-section="listen"]')
-        : null);
-    return Boolean(listenSection && listenSection.classList && listenSection.classList.contains('is-open'));
-  }
 
   function clearPageHideTimer() {
     if (session.pageHideTimer) {
@@ -141,7 +130,7 @@ export function createTTS(context, { ui }) {
 
   function tokenize() {
     clearHighlight();
-    const doc = getDoc();
+    const doc = getDoc(context);
     const result = doc ? tokenizeReaderDOM(els.readerContent, doc) : tokenizeReaderDOM(els.readerContent);
     session.wordSpans = result.spans;
     session.wordMeta = result.meta;
@@ -169,7 +158,7 @@ export function createTTS(context, { ui }) {
     session.voicesSignature = signature;
     session.voices = sorted;
     const previousSelection = els.voiceSelect.value || '';
-    const doc = getDoc();
+    const doc = getDoc(context);
     els.voiceSelect.innerHTML = '';
     if (doc && typeof doc.createElement === 'function') {
       session.voices.forEach((voice, index) => {
@@ -266,6 +255,17 @@ export function createTTS(context, { ui }) {
     }, KEEP_ALIVE_MS);
   }
 
+  function updateSpeedDisplay(value) {
+    const label = `${value.toFixed(1)}x`;
+    if (els.voiceRateVal) els.voiceRateVal.textContent = label;
+    if (els.audioSpeedBtn) {
+      els.audioSpeedBtn.textContent = label;
+      if (typeof els.audioSpeedBtn.setAttribute === 'function') {
+        els.audioSpeedBtn.setAttribute('aria-label', `Narration speed: ${label}`);
+      }
+    }
+  }
+
   function setState(nextState) {
     session.state = nextState;
     const idle = nextState === STATE_IDLE;
@@ -278,15 +278,15 @@ export function createTTS(context, { ui }) {
       els.ttsBtn.classList.toggle('active', playing || paused);
       els.ttsBtn.setAttribute('aria-pressed', playing ? 'true' : 'false');
       if (playing) {
-        els.ttsBtn.innerHTML = '<span aria-hidden="true">&#x23F8;</span> Pause';
+        els.ttsBtn.innerHTML = `${ICON_PAUSE} Pause`;
         els.ttsBtn.setAttribute('aria-label', 'Pause Read Aloud');
         els.ttsBtn.setAttribute('title', 'Pause Read Aloud');
       } else if (paused) {
-        els.ttsBtn.innerHTML = '<span aria-hidden="true">&#x25B6;</span> Resume';
+        els.ttsBtn.innerHTML = `${ICON_PLAY} Resume`;
         els.ttsBtn.setAttribute('aria-label', 'Resume Read Aloud');
         els.ttsBtn.setAttribute('title', 'Resume Read Aloud');
       } else {
-        els.ttsBtn.innerHTML = '<span aria-hidden="true">&#x1F50A;</span> Read Aloud';
+        els.ttsBtn.innerHTML = `${ICON_PLAY} Read Aloud`;
         els.ttsBtn.setAttribute('aria-label', 'Start Read Aloud');
         els.ttsBtn.setAttribute('title', 'Start Read Aloud');
       }
@@ -308,11 +308,11 @@ export function createTTS(context, { ui }) {
         els.audioPlayPauseBtn.setAttribute('aria-pressed', playing ? 'true' : 'false');
       }
       if (playing) {
-        els.audioPlayPauseBtn.innerHTML = '<span aria-hidden="true">&#x23F8;</span>';
+        els.audioPlayPauseBtn.innerHTML = ICON_PAUSE;
         els.audioPlayPauseBtn.setAttribute('aria-label', 'Pause narration');
         els.audioPlayPauseBtn.setAttribute('title', 'Pause narration');
       } else {
-        els.audioPlayPauseBtn.innerHTML = '<span aria-hidden="true">&#x25B6;</span>';
+        els.audioPlayPauseBtn.innerHTML = ICON_PLAY;
         els.audioPlayPauseBtn.setAttribute('aria-label', paused ? 'Resume narration' : 'Play narration');
         els.audioPlayPauseBtn.setAttribute('title', paused ? 'Resume narration' : 'Play narration');
       }
@@ -320,7 +320,7 @@ export function createTTS(context, { ui }) {
     if (els.audioStopBtn) els.audioStopBtn.disabled = idle;
     if (els.audioStatusText) els.audioStatusText.textContent = playing ? 'Speaking...' : paused ? 'Paused' : 'Speech Ready';
     if (els.readerContent && els.readerContent.classList && typeof els.readerContent.classList.toggle === 'function') {
-      els.readerContent.classList.toggle('tts-interactive', playing || paused || isListenSectionOpen());
+      els.readerContent.classList.toggle('tts-interactive', playing || paused || isListenSectionOpen(context));
     }
   }
 
@@ -355,14 +355,14 @@ export function createTTS(context, { ui }) {
         session.chunkIndex += 1;
         speakChunk(session.chunks[session.chunkIndex], generation);
       } else if (session.state === STATE_PLAYING) {
-        finishSpeech();
+        stopTTS();
       }
     };
     utterance.onerror = event => {
       if (generation !== session.speechGeneration || session.finishing) return;
       if (event.error === 'interrupted' || event.error === 'canceled') {
         stopEstimateTimer();
-        if (session.state === STATE_PLAYING) finishSpeech();
+        if (session.state === STATE_PLAYING) stopTTS();
         else if (session.state === STATE_PAUSED) session.visibilityInterrupted = true;
         return;
       }
@@ -371,7 +371,7 @@ export function createTTS(context, { ui }) {
           ? 'Speech permission was denied. Check your browser audio settings.'
           : 'Speech playback stopped unexpectedly. Try another voice or browser.';
         ui.showStatus(message, 'error');
-        finishSpeech();
+        stopTTS();
       }
     };
     return utterance;
@@ -400,7 +400,7 @@ export function createTTS(context, { ui }) {
     if (session.chunks.length) {
       speakChunk(session.chunks[0], session.speechGeneration);
       highlightAtIndex(startChar);
-    } else finishSpeech();
+    } else stopTTS();
   }
 
   function startSpeech(fromWordIndex = 0) {
@@ -419,8 +419,7 @@ export function createTTS(context, { ui }) {
     ui.announceLive('Text-to-speech started.');
   }
 
-  function pauseSpeech() {
-    if (session.state !== STATE_PLAYING) return;
+  function pauseSynthForPause() {
     stopEstimateTimer();
     stopKeepAliveTimer();
     if (session.isMobile) {
@@ -430,6 +429,11 @@ export function createTTS(context, { ui }) {
       try { session.synth.pause(); } catch (err) {}
     }
     setState(STATE_PAUSED);
+  }
+
+  function pauseSpeech() {
+    if (session.state !== STATE_PLAYING) return;
+    pauseSynthForPause();
     ui.announceLive('Text-to-speech paused.');
   }
 
@@ -448,10 +452,6 @@ export function createTTS(context, { ui }) {
       }
     }
     ui.announceLive('Text-to-speech resumed.');
-  }
-
-  function finishSpeech() {
-    stopTTS();
   }
 
   function stopTTS() {
@@ -492,27 +492,21 @@ export function createTTS(context, { ui }) {
     const current = parseFloat(els.voiceRateInput ? els.voiceRateInput.value : '1.0') || 1.0;
     const nextSpeed = SPEED_STEPS.find(s => s > current + 0.049) ?? SPEED_STEPS[0];
     if (els.voiceRateInput) els.voiceRateInput.value = nextSpeed;
-    if (els.voiceRateVal) els.voiceRateVal.textContent = `${nextSpeed.toFixed(1)}x`;
-    if (els.audioSpeedBtn) els.audioSpeedBtn.textContent = `${nextSpeed.toFixed(1)}x`;
+    updateSpeedDisplay(nextSpeed);
     ui.announceLive(`Speech speed changed to ${nextSpeed.toFixed(1)}x.`);
     if (session.state === STATE_PLAYING) restartFromWord(session.currentWordIndex >= 0 ? session.currentWordIndex : 0);
     else if (session.state === STATE_PAUSED) session.visibilityInterrupted = true;
   }
 
+  function pauseForBackground() {
+    if (session.state !== STATE_PLAYING) return;
+    session.visibilityInterrupted = true;
+    pauseSynthForPause();
+  }
+
   function handlePageHide() {
     clearPageHideTimer();
-    if (session.state === STATE_PLAYING) {
-      session.visibilityInterrupted = true;
-      stopEstimateTimer();
-      stopKeepAliveTimer();
-      if (session.isMobile) {
-        session.speechGeneration += 1;
-        try { session.synth.cancel(); } catch (err) {}
-      } else {
-        try { session.synth.pause(); } catch (err) {}
-      }
-      setState(STATE_PAUSED);
-    }
+    pauseForBackground();
     if (session.state === STATE_PAUSED) {
       session.pageHideTimer = setTimeout(() => {
         session.pageHideTimer = null;
@@ -529,20 +523,9 @@ export function createTTS(context, { ui }) {
   }
 
   function handleVisibilityChange() {
-    const doc = getDoc();
+    const doc = getDoc(context);
     if (doc && doc.hidden) {
-      if (session.state === STATE_PLAYING) {
-        session.visibilityInterrupted = true;
-        stopEstimateTimer();
-        stopKeepAliveTimer();
-        if (session.isMobile) {
-          session.speechGeneration += 1;
-          try { session.synth.cancel(); } catch (err) {}
-        } else {
-          try { session.synth.pause(); } catch (err) {}
-        }
-        setState(STATE_PAUSED);
-      }
+      pauseForBackground();
     }
   }
 
@@ -560,12 +543,11 @@ export function createTTS(context, { ui }) {
         else if (session.state === STATE_PAUSED) session.visibilityInterrupted = true;
       });
     }
-    if (els.voiceRateInput && els.voiceRateVal) {
+    if (els.voiceRateInput) {
       els.voiceRateInput.addEventListener('input', () => {
         const value = clampNumber(els.voiceRateInput.value, 1.0, 0.5, 2.5);
         els.voiceRateInput.value = value;
-        els.voiceRateVal.textContent = `${value.toFixed(1)}x`;
-        if (els.audioSpeedBtn) els.audioSpeedBtn.textContent = `${value.toFixed(1)}x`;
+        updateSpeedDisplay(value);
       });
       els.voiceRateInput.addEventListener('change', () => {
         const value = clampNumber(els.voiceRateInput.value, 1.0, 0.5, 2.5);
@@ -579,7 +561,7 @@ export function createTTS(context, { ui }) {
         window.addEventListener('pagehide', handlePageHide);
         window.addEventListener('pageshow', handlePageShow);
       }
-      const doc = getDoc();
+      const doc = getDoc(context);
       if (doc && typeof doc.addEventListener === 'function') {
         doc.addEventListener('visibilitychange', handleVisibilityChange);
       }
@@ -615,7 +597,6 @@ export function createTTS(context, { ui }) {
     startSpeech,
     stopTTS,
     tokenize,
-    tokenizeReaderDOM,
     toggleTTS
   };
 }

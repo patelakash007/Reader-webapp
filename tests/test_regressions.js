@@ -1647,6 +1647,130 @@ function withSavedGlobals(keys, fn) {
   assert(wrappedTableHtml.includes('<div class="table-wrap"><table>') && wrappedTableHtml.includes('</table></div>'), `Tables must be wrapped in .table-wrap: ${wrappedTableHtml}`);
   console.log('✓ Markdown tables render inside .table-wrap container.');
 
+  console.log('\n--- 55. Settings & Presets: Exclusive accordion, live typography readouts, and gesture hint subtitle ---');
+  (() => {
+    const makeSection = (name, open) => {
+      const attrs = {};
+      const toggleAttrs = { 'aria-expanded': open ? 'true' : 'false' };
+      const panel = { hidden: !open, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };
+      const toggle = {
+        setAttribute(k, v) { toggleAttrs[k] = v; },
+        getAttribute(k) { return toggleAttrs[k] || ''; }
+      };
+      return {
+        classList: makeClassList(open ? ['is-open'] : []),
+        getAttribute: k => (k === 'data-settings-section' ? name : (attrs[k] || null)),
+        querySelector: sel => (sel === '.settings-section-toggle' ? toggle : (sel === '.settings-section-panel' ? panel : null)),
+        panel,
+        toggle
+      };
+    };
+    const secTheme = makeSection('theme', true);
+    const secText = makeSection('text', false);
+    const secListen = makeSection('listen', false);
+    const lineHeightVal = { textContent: '' };
+    const letterSpacingVal = { textContent: '' };
+    const marginVal = { textContent: '' };
+    const gestureHintText = { textContent: '' };
+    const gestureHintSub = { textContent: '' };
+    const ctx55 = createAppContext({
+      settingsSections: [secTheme, secText, secListen],
+      lineHeightInput: { value: '1.85' },
+      lineHeightVal,
+      letterSpacingInput: { value: '-0.015' },
+      letterSpacingVal,
+      marginInput: { value: '24' },
+      marginVal,
+      readerContent: { classList: makeClassList(), style: {} },
+      presetTrack: { classList: makeClassList(), style: {}, querySelectorAll: () => [] },
+      presetWindow: { setAttribute() {} },
+      presetDots: { querySelectorAll: () => [] },
+      themeSettingsSummary: { textContent: '' },
+      gestureHint: { classList: makeClassList() },
+      gestureHintText,
+      gestureHintSub
+    });
+    const settings55 = createSettings(ctx55, { onResetToolbarTimer() {}, isMobileSheetLayout: () => false });
+    settings55.toggleSettingsSection(secText);
+    assert.strictEqual(secText.classList.contains('is-open'), true, 'Text section should expand');
+    assert.strictEqual(secTheme.classList.contains('is-open'), false, 'Expanding Text must collapse Theme');
+
+    settings55.setLineHeight(2.1);
+    settings55.setLetterSpacing(0.025);
+    settings55.updateMarginStyle(40);
+    assert.strictEqual(lineHeightVal.textContent, '2.10', 'Line height readout must update');
+    assert.strictEqual(letterSpacingVal.textContent, '0.025em', 'Letter spacing readout must update');
+    assert.strictEqual(marginVal.textContent, '40px', 'Margin readout must update');
+
+    settings55.nextPreset();
+    assert.strictEqual(gestureHintText.textContent, 'Zen', 'Gesture hint title should show preset name');
+    assert(gestureHintSub.textContent.includes('Light') && gestureHintSub.textContent.includes('Pure minimal white'), `Gesture hint subtitle should show mode and description, got: ${gestureHintSub.textContent}`);
+    if (ctx55.state.gestureHintTimer) clearTimeout(ctx55.state.gestureHintTimer);
+  })();
+  console.log('✓ Exclusive accordion, live typography readouts, and gesture hint subtitle verified.');
+
+  console.log('\n--- 56. UI & Reader: Single active aria-live status banner, inline-flex clearBtn, and selection toolbar guard ---');
+  withSavedGlobals(['window', 'document'], () => {
+    const docListeners56 = {};
+    const statusMsg = { textContent: '', className: 'status-message' };
+    const readerStatusMsg = { textContent: '', className: 'status-message reader-status-message' };
+    const readerViewEl = { classList: makeClassList() };
+    const clearBtnEl = { style: {}, addEventListener() {} };
+    const toolbarEl = { classList: makeClassList(['hidden-bar']), contains: () => false, addEventListener() {} };
+    const readerContentEl = { contains: target => target === 'word-node', addEventListener() {} };
+    global.window = {
+      matchMedia: () => ({ matches: false }),
+      setTimeout,
+      clearTimeout,
+      getSelection: () => ({ isCollapsed: false, toString: () => 'selected' }),
+      addEventListener() {}
+    };
+    global.document = { addEventListener(evt, cb) { docListeners56[evt] = cb; } };
+
+    const ctx56 = createAppContext({
+      readerView: readerViewEl,
+      statusMessage: statusMsg,
+      readerStatusMessage: readerStatusMsg,
+      pasteArea: { value: 'hello', addEventListener() {} },
+      clearBtn: clearBtnEl,
+      toolbar: toolbarEl,
+      readerContent: readerContentEl
+    });
+    const ui56 = createUI(ctx56);
+    ui56.showStatus('Input warning', 'error');
+    assert.strictEqual(statusMsg.textContent, 'Input warning', 'Input view status banner should update while input view is active');
+    assert.strictEqual(readerStatusMsg.textContent, '', 'Hidden reader status banner must not receive duplicate live-region update');
+
+    readerViewEl.classList.add('active');
+    ui56.showStatus('Reader info', 'info');
+    assert.strictEqual(readerStatusMsg.textContent, 'Reader info', 'Reader status banner should update while reader view is active');
+    assert.strictEqual(statusMsg.textContent, '', 'Hidden input status banner must be cleared when reader view is active');
+    if (ctx56.state.statusTimer) clearTimeout(ctx56.state.statusTimer);
+
+    const reader56 = createReader(ctx56, {
+      ui: ui56,
+      parser: mockParser,
+      tts: mockTTS,
+      getSettings: mockSettings
+    });
+    reader56.bindEvents();
+    reader56.toggleClearBtn();
+    assert.strictEqual(clearBtnEl.style.display, 'inline-flex', 'Clear button must preserve inline-flex centering');
+    assert.strictEqual(docListeners56.touchstart, undefined, 'Document touchstart must not hijack scrolling to reveal toolbar');
+    docListeners56.click({ target: 'word-node' });
+    assert.strictEqual(toolbarEl.classList.contains('hidden-bar'), true, 'Click while text is selected must not reveal desktop toolbar');
+  });
+  console.log('✓ Single active status banner, inline-flex clear button, and toolbar tap guards verified.');
+
+  console.log('\n--- 57. CSS & HTML hygiene: Blockquote padding, task list markers, no duplicate favicon or --reader-text-color ---');
+  assert(!styleCss.includes('--reader-text-color'), 'Redundant --reader-text-color token should be removed in favor of --text');
+  assert(!styleCss.includes('--heading-weight'), 'Redundant --heading-weight token should be removed');
+  assert(styleCss.includes('.reader-content > :first-child { margin-top: 0; }'), 'First reader element must zero top margin');
+  assert(styleCss.includes('padding: 0.75em 1.25em;') && styleCss.includes('.reader-content blockquote > :last-child'), 'Blockquote must define right padding and strip trailing paragraph margin');
+  assert(styleCss.includes('li:has(> input[type="checkbox"])'), 'Task lists must suppress duplicate bullet markers');
+  assert(!indexHtml.includes('data:image/svg+xml'), 'Duplicate inline emoji favicon should be removed');
+  console.log('✓ CSS & HTML hygiene checks verified.');
+
   console.log('\n====================================================');
   console.log('ALL REGRESSION TESTS PASSED SUCCESSFULLY');
   console.log('====================================================\n');

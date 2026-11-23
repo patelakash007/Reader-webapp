@@ -1,6 +1,8 @@
 import { createMarkdownRenderer } from './parser.mjs';
 import { formatError } from './utils.mjs';
 
+const LOADER_CHAR_THRESHOLD = 50_000;
+
 export function createReaderRenderer(context, { ui, tts }) {
   const { els, state, runtime } = context;
 
@@ -10,8 +12,20 @@ export function createReaderRenderer(context, { ui, tts }) {
     if (tts && typeof tts.invalidateTokenization === 'function') {
       tts.invalidateTokenization();
     }
-    const shouldShowLoader = !options.suppressLoader;
-    if (shouldShowLoader) ui.showLoader('Preparing reader...');
+    let loaderVisible = false;
+    const showLoaderIfAllowed = () => {
+      if (options.suppressLoader || loaderVisible) return;
+      loaderVisible = true;
+      ui.showLoader('Preparing reader...');
+    };
+    const hideLoaderIfShown = () => {
+      if (!loaderVisible) return;
+      loaderVisible = false;
+      ui.hideLoader();
+    };
+    if (typeof text === 'string' && text.length > LOADER_CHAR_THRESHOLD) {
+      showLoaderIfAllowed();
+    }
     els.readerContent.textContent = '';
 
     const renderer = createMarkdownRenderer(state.smartHeadings);
@@ -38,7 +52,6 @@ export function createReaderRenderer(context, { ui, tts }) {
 
         if (index > startIndex) {
           const chunkTokens = tokens.slice(startIndex, index);
-          chunkTokens.links = tokens.links;
           const html = renderer.renderTokens(chunkTokens, tokens.links);
           if (html && renderId === runtime.reader.activeRenderId && els.readerContent) {
             els.readerContent.insertAdjacentHTML('beforeend', html);
@@ -47,6 +60,7 @@ export function createReaderRenderer(context, { ui, tts }) {
         if (renderId !== runtime.reader.activeRenderId) return;
 
         if (index < tokens.length) {
+          showLoaderIfAllowed();
           if (typeof window !== 'undefined' && window.requestAnimationFrame) {
             window.requestAnimationFrame(processChunk);
           } else {
@@ -55,11 +69,11 @@ export function createReaderRenderer(context, { ui, tts }) {
           return;
         }
         if (renderId !== runtime.reader.activeRenderId) return;
-        if (shouldShowLoader) ui.hideLoader();
+        hideLoaderIfShown();
         if (onComplete && renderId === runtime.reader.activeRenderId) onComplete();
       } catch (err) {
         if (renderId !== runtime.reader.activeRenderId) return;
-        if (shouldShowLoader) ui.hideLoader();
+        hideLoaderIfShown();
         ui.showStatus(`Could not render this text safely: ${formatError(err)}`, 'error');
       }
     };
@@ -70,7 +84,7 @@ export function createReaderRenderer(context, { ui, tts }) {
         tokens = renderer.tokenize(text);
       } catch (err) {
         if (renderId !== runtime.reader.activeRenderId) return;
-        if (shouldShowLoader) ui.hideLoader();
+        hideLoaderIfShown();
         ui.showStatus(`Could not render this text safely: ${formatError(err)}`, 'error');
         return;
       }
@@ -78,7 +92,7 @@ export function createReaderRenderer(context, { ui, tts }) {
     };
 
     if (typeof setTimeout !== 'undefined') {
-      setTimeout(startRender, 10);
+      setTimeout(startRender, 0);
     } else {
       startRender();
     }

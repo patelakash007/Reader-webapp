@@ -92,11 +92,11 @@ All pasted input flows through `enforceExtractedTextLimit()` (enforcing `MAX_EXT
 
 ## Responsive Layout, Theming & Accessibility
 
-- **20 Themes (`style.css` + `src/constants.mjs`):** All 10 light and 10 dark presets use CSS custom properties (`--bg`, `--card`, `--text`, `--text2`, `--accent`, `--on-accent`, `--toolbar-bg`, `--reader-text-color`) with `color-mix()` tinting, tested in `tests/test_regressions.js` for WCAG AA (`>= 4.5:1`) contrast. Applying a preset also updates `<meta name="theme-color">`.
+- **20 Themes (`style.css` + `src/constants.mjs`):** All 10 light and 10 dark presets use CSS custom properties (`--bg`, `--card`, `--text`, `--text2`, `--accent`, `--on-accent`, `--toolbar-bg`) with `color-mix()` tinting, tested in `tests/test_regressions.js` for WCAG AA (`>= 4.5:1`) contrast. Applying a preset also updates `<meta name="theme-color">`.
 - **Responsive breakpoints (`style.css`):**
-  - **Desktop (`> 960px`):** 3-column grid settings drawer inside an auto-hiding fixed top bar (3.5 s idle timer, paused on pointer hover or keyboard focus, revealed on top-edge mouse move, tap, or `Tab`).
-  - **Tablet (`641px–960px`):** 2-column settings grid with full-width theme/expanded sections.
-  - **Mobile (`<= 640px`):** Floating action button (`#mobileFab`) toggles `#toolbar` as a modal bottom sheet (`role="dialog"`, `aria-modal="true"`) with scroll lock (`body.mobile-sheet-active`), backdrop dismissal, focus restoration (`runtime.reader.lastActiveElement`), and a keyboard `Tab`/`Shift+Tab` focus trap that includes the Close pill.
+  - **Desktop (`> 960px`):** 3-column floating settings cards inside an auto-hiding fixed top shelf (exclusive accordion, 3.5 s idle timer paused on pointer hover or keyboard focus, revealed on top-edge mouse move, tap, or `Tab`).
+  - **Tablet (`641px–960px`):** 2-column dense settings grid with full-width active section and exclusive accordion.
+  - **Mobile (`<= 640px`):** Floating action button (`#mobileFab`) toggles `#toolbar` as a modal bottom sheet (`role="dialog"`, `aria-modal="true"`) with scroll lock (`body.mobile-sheet-active`), backdrop dismissal, focus restoration (`runtime.reader.lastActiveElement`), and a keyboard `Tab`/`Shift+Tab` focus trap that includes the anchored Close pill.
 - **Focusability & Reduced Motion:** `ui.setContainerFocusable()` toggles both `inert` and saved `tabindex` values (plus `aria-hidden` on `#toolbar` and `#audioPlayerBar`) when bars are hidden. `@media (prefers-reduced-motion: reduce)` disables CSS transitions/animations, and TTS auto-scroll switches from `smooth` to `auto`.
 
 ## Text-to-Speech (TTS) Engine
@@ -118,7 +118,7 @@ The TTS subsystem is split into pure helpers (`src/tts-core.mjs`) and the statef
 
 ### Service Worker (`sw.js`)
 
-- **Atomic precaching (`install`):** Precaches all 27 `APP_SHELL` URLs into `CACHE_NAME` (`reader-webapp-shell-v13`) with `{ cache: 'reload' }` and calls `self.skipWaiting()`.
+- **Atomic precaching (`install`):** Precaches all 27 `APP_SHELL` URLs into `CACHE_NAME` (`reader-webapp-shell-v14`) with `{ cache: 'reload' }` and calls `self.skipWaiting()`.
 - **Cache cleanup (`activate`):** Deletes stale caches matching `reader-webapp-*` and calls `self.clients.claim()`.
 - **Fetch strategies:**
   - **Canonical navigations (`./`, `./index.html`):** Network-first (`cache: 'no-cache'`), mirroring successful responses under both `ROOT_URL` and `INDEX_URL`, falling back to the cached app shell when offline or when a non-OK response occurs.

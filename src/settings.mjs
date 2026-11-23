@@ -1,4 +1,7 @@
 import {
+  DEFAULT_LETTER_SPACING,
+  DEFAULT_LINE_HEIGHT,
+  DEFAULT_MARGIN,
   THEME_COLORS,
   VALID_FONTS,
   VALID_SIZES,
@@ -7,16 +10,12 @@ import {
   fontMap,
   lightPresets
 } from './constants.mjs';
-import { clampIndex, clampNumber, getElementTarget } from './utils.mjs';
+import { clampIndex, clampNumber, getDoc, getElementTarget } from './utils.mjs';
 import { createPresetCarousel } from './preset-carousel.mjs';
 
-export function createSettings(context, { onResetToolbarTimer, isMobileSheetLayout }) {
+export function createSettings(context, { onResetToolbarTimer, isMobileSheetLayout, onSettingsSectionToggle } = {}) {
   const { els, state, runtime } = context;
   let initialized = false;
-
-  function getDoc() {
-    return context.doc || (typeof document !== 'undefined' ? document : null);
-  }
 
   function getPresets() {
     return state.currentMode === 'dark' ? darkPresets : lightPresets;
@@ -34,6 +33,7 @@ export function createSettings(context, { onResetToolbarTimer, isMobileSheetLayo
     canUseGlobalPresetShortcut,
     endCarouselDrag,
     hasSelectedText,
+    moveCarouselDrag,
     nextPreset,
     prevPreset,
     setTrackPosition,
@@ -45,18 +45,17 @@ export function createSettings(context, { onResetToolbarTimer, isMobileSheetLayo
 
   function setFont(font) {
     const nextFont = VALID_FONTS.has(font) ? font : 'sans';
-    const config = fontMap[nextFont];
-    if (!config) return;
-    const doc = getDoc();
+    const family = fontMap[nextFont];
+    if (!family) return;
+    const doc = getDoc(context);
     if (doc && doc.documentElement?.style) {
-      doc.documentElement.style.setProperty('--body-font', config.family);
-      doc.documentElement.style.setProperty('--heading-weight', config.weight);
+      doc.documentElement.style.setProperty('--body-font', family);
     }
   }
 
   function setTheme(theme) {
     const nextTheme = VALID_THEMES.has(theme) ? theme : 'claude';
-    const doc = getDoc();
+    const doc = getDoc(context);
     if (doc && doc.body?.classList) {
       Array.from(doc.body.classList)
         .filter(className => className.startsWith('theme-'))
@@ -82,7 +81,7 @@ export function createSettings(context, { onResetToolbarTimer, isMobileSheetLayo
     setTrackPosition(safeIndex, options.animate !== false);
     updateDots();
     updatePresetA11y();
-    if (options.resetTimer !== false) onResetToolbarTimer();
+    if (options.resetTimer !== false && typeof onResetToolbarTimer === 'function') onResetToolbarTimer();
   }
 
   function setMode(mode, options = {}) {
@@ -105,7 +104,7 @@ export function createSettings(context, { onResetToolbarTimer, isMobileSheetLayo
     const nextSize = VALID_SIZES.has(size) ? size : 'medium';
     els.readerContent.classList.remove('fs-small', 'fs-medium', 'fs-large', 'fs-xl');
     els.readerContent.classList.add(`fs-${nextSize}`);
-    const doc = getDoc();
+    const doc = getDoc(context);
     if (doc && typeof doc.querySelectorAll === 'function') {
       doc.querySelectorAll('[data-size]').forEach(button => {
         const active = button.getAttribute('data-size') === nextSize;
@@ -118,7 +117,7 @@ export function createSettings(context, { onResetToolbarTimer, isMobileSheetLayo
   function setSettingsSectionExpanded(section, expanded) {
     if (!section) return;
     const isExpanded = Boolean(expanded);
-    const doc = getDoc();
+    const doc = getDoc(context);
     const toggle = typeof section.querySelector === 'function' ? section.querySelector('.settings-section-toggle') : null;
     const panelId = toggle ? toggle.getAttribute('aria-controls') : '';
     const panel = panelId && doc && typeof doc.getElementById === 'function'
@@ -154,44 +153,53 @@ export function createSettings(context, { onResetToolbarTimer, isMobileSheetLayo
   function toggleSettingsSection(section) {
     if (!section) return;
     const expanded = !section.classList.contains('is-open');
+    if (expanded && Array.isArray(els.settingsSections)) {
+      els.settingsSections.forEach(other => {
+        if (other && other !== section) setSettingsSectionExpanded(other, false);
+      });
+    }
     setSettingsSectionExpanded(section, expanded);
-    onResetToolbarTimer();
-    if (expanded && isMobileSheetLayout() && els.toolbar && typeof window !== 'undefined' && window.requestAnimationFrame) {
+    if (typeof onResetToolbarTimer === 'function') onResetToolbarTimer();
+    if (typeof onSettingsSectionToggle === 'function') onSettingsSectionToggle();
+    if (expanded && typeof isMobileSheetLayout === 'function' && isMobileSheetLayout() && els.toolbar && typeof window !== 'undefined' && window.requestAnimationFrame) {
       window.requestAnimationFrame(() => section.scrollIntoView({ block: 'nearest' }));
     }
   }
 
   function setLineHeight(value) {
-    if (!els.lineHeightInput) return;
-    const next = clampNumber(value, 1.85, 1.4, 2.6);
-    els.lineHeightInput.value = next;
-    if (els.readerContent) els.readerContent.style.lineHeight = next;
+    const next = clampNumber(value, DEFAULT_LINE_HEIGHT, 1.4, 2.6);
+    if (els.lineHeightInput) els.lineHeightInput.value = next;
+    if (els.lineHeightVal) els.lineHeightVal.textContent = next.toFixed(2);
+    if (els.readerContent && els.readerContent.style) els.readerContent.style.lineHeight = next;
   }
 
   function setLetterSpacing(value) {
-    if (!els.letterSpacingInput) return;
-    const next = clampNumber(value, -0.015, -0.03, 0.15);
-    els.letterSpacingInput.value = next;
-    if (els.readerContent) els.readerContent.style.letterSpacing = `${next}em`;
+    const next = clampNumber(value, DEFAULT_LETTER_SPACING, -0.03, 0.15);
+    if (els.letterSpacingInput) els.letterSpacingInput.value = next;
+    if (els.letterSpacingVal) els.letterSpacingVal.textContent = `${next}em`;
+    if (els.readerContent && els.readerContent.style) els.readerContent.style.letterSpacing = `${next}em`;
   }
 
   function updateMarginStyle(value) {
     if (!els.readerContent) return;
-    let padding = clampNumber(value, 24, 12, 80);
+    let padding = clampNumber(value, DEFAULT_MARGIN, 12, 80);
     if (typeof window !== 'undefined' && window.innerWidth <= 640) {
       const mobileMax = Number.isFinite(window.innerWidth) && window.innerWidth > 0
         ? Math.max(24, Math.floor(window.innerWidth * 0.14))
         : 48;
       padding = Math.min(padding, mobileMax);
     }
-    els.readerContent.style.paddingLeft = `${padding}px`;
-    els.readerContent.style.paddingRight = `${padding}px`;
+    if (els.marginVal) els.marginVal.textContent = `${Math.round(padding)}px`;
+    if (els.readerContent.style) {
+      els.readerContent.style.paddingLeft = `${padding}px`;
+      els.readerContent.style.paddingRight = `${padding}px`;
+    }
   }
 
   function bindEvents() {
     if (initialized) return;
     initialized = true;
-    const doc = getDoc();
+    const doc = getDoc(context);
     if (els.modeLight) els.modeLight.addEventListener('click', () => setMode('light'));
     if (els.modeDark) els.modeDark.addEventListener('click', () => setMode('dark'));
     if (doc && typeof doc.querySelectorAll === 'function') {
@@ -211,7 +219,7 @@ export function createSettings(context, { onResetToolbarTimer, isMobileSheetLayo
         if (event.touches && event.touches.length === 1 && canStartCarouselDrag(event.target)) startCarouselDrag(event.touches[0].clientX);
       }, { passive: true });
       els.presetWindow.addEventListener('touchmove', event => {
-        if (state.isDraggingCarousel && event.touches && event.touches.length === 1) state.dragCurrentX = event.touches[0].clientX;
+        if (state.isDraggingCarousel && event.touches && event.touches.length === 1) moveCarouselDrag(event.touches[0].clientX);
       }, { passive: true });
       els.presetWindow.addEventListener('touchend', endCarouselDrag, { passive: true });
       els.presetWindow.addEventListener('touchcancel', endCarouselDrag, { passive: true });
@@ -246,7 +254,7 @@ export function createSettings(context, { onResetToolbarTimer, isMobileSheetLayo
     }
     if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       window.addEventListener('mousemove', event => {
-        if (state.isDraggingCarousel) state.dragCurrentX = event.clientX;
+        if (state.isDraggingCarousel) moveCarouselDrag(event.clientX);
       });
       window.addEventListener('mouseup', endCarouselDrag);
       window.addEventListener('blur', endCarouselDrag);
@@ -272,6 +280,7 @@ export function createSettings(context, { onResetToolbarTimer, isMobileSheetLayo
     setLineHeight,
     setMode,
     setSize,
+    toggleSettingsSection,
     updateMarginStyle,
     updateThemeSettingsSummary
   };

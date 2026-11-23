@@ -7,11 +7,11 @@ const RESERVED_DOM_IDS = new Set([
   'bottomsheethandle', 'settingsdrawer', 'themesettingssummary', 'themesettingspanel',
   'presetcarousel', 'arrowleft', 'presetwindow', 'presettrack', 'arrowright',
   'presetdots', 'modelight', 'modedark', 'textsettingspanel', 'lineheightinput',
-  'letterspacinginput', 'margininput', 'listensettingspanel', 'ttsbtn', 'ttsstopbtn',
-  'voiceselect', 'voicerateval', 'voicerateinput', 'readercontent',
-  'readerstatusmessage', 'audioplayerbar', 'audioplaypausebtn', 'audiostopbtn',
-  'audiostatustext', 'audiospeedbtn', 'gesturehint', 'gesturehinttext', 'loader',
-  'liveannouncer'
+  'lineheightval', 'letterspacinginput', 'letterspacingval', 'margininput', 'marginval',
+  'listensettingspanel', 'ttsbtn', 'ttsstopbtn', 'voiceselect', 'voicerateval',
+  'voicerateinput', 'readercontent', 'readerstatusmessage', 'audioplayerbar',
+  'audioplaypausebtn', 'audiostopbtn', 'audiostatustext', 'audiospeedbtn',
+  'gesturehint', 'gesturehinttext', 'gesturehintsub', 'loader', 'liveannouncer'
 ]);
 
 function hasControlChars(str) {
@@ -23,8 +23,10 @@ function hasControlChars(str) {
 }
 
 function decodeHtmlAttributeValue(value) {
+  const str = String(value);
+  if (!str.includes('&')) return str;
   if (typeof document === 'undefined') {
-    return String(value)
+    return str
       .replace(/&#(\d+);/g, (match, dec) => {
         const code = Number.parseInt(dec, 10);
         return Number.isFinite(code) && code >= 0 && code <= 0x10FFFF ? String.fromCodePoint(code) : match;
@@ -44,20 +46,16 @@ function decodeHtmlAttributeValue(value) {
       }[entity.toLowerCase()] || entity));
   }
   const decoder = document.createElement('textarea');
-  decoder.innerHTML = value;
+  decoder.innerHTML = str;
   return decoder.value;
 }
 
 export function normalizeSafeLinkHref(escapedUrl) {
   if (!escapedUrl || typeof escapedUrl !== 'string') return null;
   const cleanUrl = decodeHtmlAttributeValue(escapedUrl).trim();
-  if (!cleanUrl || hasControlChars(cleanUrl)) return null;
+  if (!cleanUrl || hasControlChars(cleanUrl) || cleanUrl.startsWith('//')) return null;
 
-  const unsafeSchemeRegex = /^(javascript|data|vbscript|file|blob):/i;
-  const safeSchemeRegex = /^(https?|ftp|mailto):/i;
-  if (cleanUrl.startsWith('//')) return null;
-  const isRootRelative = cleanUrl.startsWith('/') && !cleanUrl.startsWith('//');
-  const isSafe = (safeSchemeRegex.test(cleanUrl) || isRootRelative || cleanUrl.startsWith('#')) && !unsafeSchemeRegex.test(cleanUrl);
+  const isSafe = /^(https?|ftp|mailto):/i.test(cleanUrl) || cleanUrl.startsWith('/') || cleanUrl.startsWith('#');
   if (!isSafe) return null;
 
   try {

@@ -53,6 +53,21 @@ export function isMobileDevice() {
 }
 
 
+export function getDoc(context) {
+  return (context && context.doc) || (typeof document !== 'undefined' ? document : null);
+}
+
+export function isListenSectionOpen(context) {
+  const els = context && context.els;
+  const doc = getDoc(context);
+  const listenSection = Array.isArray(els?.settingsSections)
+    ? els.settingsSections.find(section => section && typeof section.getAttribute === 'function' && section.getAttribute('data-settings-section') === 'listen')
+    : (doc && typeof doc.querySelector === 'function'
+      ? doc.querySelector('[data-settings-section="listen"]')
+      : null);
+  return Boolean(listenSection && listenSection.classList && listenSection.classList.contains('is-open'));
+}
+
 export function cancelPendingRender(context, options = {}) {
   context.runtime.reader.activeRenderId += 1;
   if (options.clearContent && context.els.readerContent) {

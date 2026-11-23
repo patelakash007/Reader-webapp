@@ -15,7 +15,6 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E&#128214;%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -23,7 +22,11 @@
   <div id="progressBar"></div>
   <div class="sheet-backdrop" id="sheetBackdrop"></div>
 
-  <button class="mobile-fab" id="mobileFab" type="button" aria-label="Open Reading Settings" aria-controls="toolbar" aria-expanded="false"><span aria-hidden="true">&#x1F39B;&#xFE0F;</span></button>
+  <button class="mobile-fab" id="mobileFab" type="button" aria-label="Open Reading Settings" aria-controls="toolbar" aria-expanded="false">
+    <span class="mobile-fab-icon" aria-hidden="true">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="6" r="2" fill="currentColor"/><circle cx="15" cy="12" r="2" fill="currentColor"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+    </span>
+  </button>
 
   <main>
   <section id="inputView" aria-label="Text input">
@@ -38,7 +41,9 @@
   </section>
 
   <section id="readerView" aria-label="Reader view">
-    <button class="back-btn" id="backBtn" type="button" aria-label="Go Back"><span aria-hidden="true">&#8592;</span></button>
+    <button class="back-btn" id="backBtn" type="button" aria-label="Go Back">
+      <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+    </button>
 
     <div id="toolbar">
       <button class="bottom-sheet-handle" id="bottomSheetHandle" type="button" aria-label="Collapse Reading Settings"></button>
@@ -55,16 +60,26 @@
           <div class="settings-section-panel" id="themeSettingsPanel">
             <div class="settings-panel-inner">
               <div class="preset-carousel" id="presetCarousel">
-                <button class="preset-arrow" id="arrowLeft" type="button" aria-label="Previous Preset"><span aria-hidden="true">&#10094;</span></button>
+                <button class="preset-arrow" id="arrowLeft" type="button" aria-label="Previous Preset">
+                  <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
                 <div class="preset-window" id="presetWindow" tabindex="0" role="region" aria-label="Reading preset carousel">
                   <div class="preset-track snapping" id="presetTrack"></div>
                 </div>
-                <button class="preset-arrow" id="arrowRight" type="button" aria-label="Next Preset"><span aria-hidden="true">&#10095;</span></button>
+                <button class="preset-arrow" id="arrowRight" type="button" aria-label="Next Preset">
+                  <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
               </div>
               <div class="preset-dots" id="presetDots" aria-hidden="true"></div>
               <div class="mode-toggle-row">
-                <button class="mode-btn active" id="modeLight" type="button" aria-pressed="true"><span aria-hidden="true">&#9728;</span> Light</button>
-                <button class="mode-btn" id="modeDark" type="button" aria-pressed="false"><span aria-hidden="true">&#9790;</span> Dark</button>
+                <button class="mode-btn active" id="modeLight" type="button" aria-pressed="true">
+                  <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+                  Light
+                </button>
+                <button class="mode-btn" id="modeDark" type="button" aria-pressed="false">
+                  <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                  Dark
+                </button>
               </div>
             </div>
           </div>
@@ -80,26 +95,32 @@
           </button>
           <div class="settings-section-panel" id="textSettingsPanel" hidden>
             <div class="settings-panel-inner">
-              <div class="size-control-group">
-                <span class="settings-label">Text Size</span>
-                <div class="size-choice-row" role="group" aria-label="Text size">
-                  <button class="tb-btn" data-size="small" type="button" aria-label="Small text size" aria-pressed="false">S</button>
-                  <button class="tb-btn active" data-size="medium" type="button" aria-label="Medium text size" aria-pressed="true">M</button>
-                  <button class="tb-btn" data-size="large" type="button" aria-label="Large text size" aria-pressed="false">L</button>
-                  <button class="tb-btn" data-size="xl" type="button" aria-label="Extra large text size" aria-pressed="false">XL</button>
-                </div>
+              <div class="size-choice-row" role="group" aria-label="Text size">
+                <button class="tb-btn" data-size="small" type="button" aria-label="Small text size" aria-pressed="false">S</button>
+                <button class="tb-btn active" data-size="medium" type="button" aria-label="Medium text size" aria-pressed="true">M</button>
+                <button class="tb-btn" data-size="large" type="button" aria-label="Large text size" aria-pressed="false">L</button>
+                <button class="tb-btn" data-size="xl" type="button" aria-label="Extra large text size" aria-pressed="false">XL</button>
               </div>
               <div class="settings-row">
                 <div class="control-item">
-                  <label for="lineHeightInput">Line Height</label>
+                  <div class="control-label-row">
+                    <label for="lineHeightInput">Line Height</label>
+                    <span class="value-display" id="lineHeightVal">1.85</span>
+                  </div>
                   <input type="range" id="lineHeightInput" min="1.4" max="2.6" step="0.05" value="1.85">
                 </div>
                 <div class="control-item">
-                  <label for="letterSpacingInput">Letter Spacing</label>
+                  <div class="control-label-row">
+                    <label for="letterSpacingInput">Letter Spacing</label>
+                    <span class="value-display" id="letterSpacingVal">-0.015em</span>
+                  </div>
                   <input type="range" id="letterSpacingInput" min="-0.03" max="0.15" step="0.005" value="-0.015">
                 </div>
                 <div class="control-item">
-                  <label for="marginInput">Margins</label>
+                  <div class="control-label-row">
+                    <label for="marginInput">Margins</label>
+                    <span class="value-display" id="marginVal">24px</span>
+                  </div>
                   <input type="range" id="marginInput" min="12" max="80" step="4" value="24">
                 </div>
               </div>
@@ -117,9 +138,15 @@
           </button>
           <div class="settings-section-panel" id="listenSettingsPanel" hidden>
             <div class="settings-panel-inner">
-              <div class="tool-grid compact-tool-grid">
-                <button class="tb-btn" id="ttsBtn" type="button" title="Start Read Aloud" aria-label="Start Read Aloud" aria-pressed="false"><span aria-hidden="true">&#x1F50A;</span> Read Aloud</button>
-                <button class="tb-btn" id="ttsStopBtn" type="button" title="Stop Read Aloud" aria-label="Stop Read Aloud" disabled><span aria-hidden="true">&#x23F9;</span> Stop</button>
+              <div class="tool-grid">
+                <button class="tb-btn" id="ttsBtn" type="button" title="Start Read Aloud" aria-label="Start Read Aloud" aria-pressed="false">
+                  <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+                  Read Aloud
+                </button>
+                <button class="tb-btn" id="ttsStopBtn" type="button" title="Stop Read Aloud" aria-label="Stop Read Aloud" disabled>
+                  <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+                  Stop
+                </button>
               </div>
               <div class="settings-row">
                 <div class="control-item voice-control">
@@ -146,22 +173,26 @@
 
     <!-- Floating Audio Player Bar -->
     <div class="audio-player-bar" id="audioPlayerBar" role="region" aria-label="Audio player controls" aria-hidden="true">
-      <button class="audio-bar-btn" id="audioPlayPauseBtn" type="button" title="Play or Pause narration" aria-label="Play or Pause narration"><span aria-hidden="true">&#x25B6;</span></button>
-      <button class="audio-bar-btn" id="audioStopBtn" type="button" title="Stop narration" aria-label="Stop narration" disabled><span aria-hidden="true">&#x23F9;</span></button>
+      <button class="audio-bar-btn" id="audioPlayPauseBtn" type="button" title="Play or Pause narration" aria-label="Play or Pause narration">
+        <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><polygon points="7 4 20 12 7 20 7 4"/></svg>
+      </button>
+      <button class="audio-bar-btn" id="audioStopBtn" type="button" title="Stop narration" aria-label="Stop narration" disabled>
+        <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+      </button>
       <div class="audio-bar-info">
         <span class="audio-bar-title" id="audioStatusText">Speech Ready</span>
         <span class="audio-bar-hint">Click word to speak</span>
       </div>
       <div class="audio-bar-actions">
-        <button class="audio-bar-chip" id="audioSpeedBtn" type="button" title="Narration speed">1.0x</button>
+        <button class="audio-bar-chip" id="audioSpeedBtn" type="button" title="Narration speed" aria-label="Narration speed: 1.0x">1.0x</button>
       </div>
     </div>
   </section>
   </main>
 
-  <div id="gestureHint">
-    <div class="gesture-hint-text" id="gestureHintText">Swipe left / right</div>
-    <div class="gesture-hint-sub">to change reading preset</div>
+  <div id="gestureHint" aria-hidden="true">
+    <div class="gesture-hint-text" id="gestureHintText"></div>
+    <div class="gesture-hint-sub" id="gestureHintSub"></div>
   </div>
 
   <div id="loader" role="status" aria-live="assertive" aria-atomic="true">

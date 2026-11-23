@@ -1,3 +1,5 @@
+import { getDoc } from './utils.mjs';
+
 export function createReaderNavigation(context, { ui, getSettings, resetToolbarTimer }) {
   const { els, state, runtime } = context;
   let sheetFocusTrapListener = null;
@@ -11,10 +13,6 @@ export function createReaderNavigation(context, { ui, getSettings, resetToolbarT
     'textarea:not([disabled]):not([tabindex="-1"])',
     '[tabindex]:not([tabindex="-1"])'
   ].join(', ');
-
-  function getDoc() {
-    return context.doc || (typeof document !== 'undefined' ? document : null);
-  }
 
   function isElementVisible(el) {
     if (!el) return false;
@@ -43,8 +41,37 @@ export function createReaderNavigation(context, { ui, getSettings, resetToolbarT
     return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
   }
 
+  function syncMobileSheetHeight() {
+    const doc = getDoc(context);
+    const rootStyle = doc && doc.documentElement && doc.documentElement.style;
+    if (!rootStyle || typeof rootStyle.setProperty !== 'function') return;
+
+    const applyHeight = () => {
+      if (!isMobileSheetLayout() || !els.toolbar || !els.toolbar.classList.contains('expanded')) {
+        if (typeof rootStyle.removeProperty === 'function') {
+          rootStyle.removeProperty('--mobile-sheet-height');
+        }
+        return;
+      }
+      const height = typeof els.toolbar.getBoundingClientRect === 'function'
+        ? els.toolbar.getBoundingClientRect().height
+        : (els.toolbar.offsetHeight || 0);
+      if (height > 0) {
+        rootStyle.setProperty('--mobile-sheet-height', `${Math.round(height)}px`);
+      }
+    };
+
+    applyHeight();
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(applyHeight);
+    }
+  }
+
   function stripMobileSheetOverlayState() {
-    const doc = getDoc();
+    const doc = getDoc(context);
+    if (doc && doc.documentElement?.style && typeof doc.documentElement.style.removeProperty === 'function') {
+      doc.documentElement.style.removeProperty('--mobile-sheet-height');
+    }
     if (els.toolbar) {
       els.toolbar.classList.remove('expanded');
       if (typeof els.toolbar.removeAttribute === 'function') {
@@ -78,7 +105,7 @@ export function createReaderNavigation(context, { ui, getSettings, resetToolbarT
   }
 
   function expandMobileSheet() {
-    const doc = getDoc();
+    const doc = getDoc(context);
     runtime.reader.lastActiveElement = doc ? doc.activeElement : null;
     if (typeof window !== 'undefined' && window.clearTimeout) {
       window.clearTimeout(state.toolbarTimer);
@@ -105,6 +132,7 @@ export function createReaderNavigation(context, { ui, getSettings, resetToolbarT
         els.mobileFab.setAttribute('aria-expanded', 'true');
       }
     }
+    syncMobileSheetHeight();
 
     if (els.toolbar && typeof els.toolbar.querySelectorAll === 'function') {
       const focusableElements = getSheetFocusables();
@@ -143,7 +171,7 @@ export function createReaderNavigation(context, { ui, getSettings, resetToolbarT
   }
 
   function collapseMobileSheet() {
-    const doc = getDoc();
+    const doc = getDoc(context);
     stripMobileSheetOverlayState();
     ui.setContainerFocusable(els.toolbar, false);
     if (els.toolbar) els.toolbar.scrollTop = 0;
@@ -178,6 +206,7 @@ export function createReaderNavigation(context, { ui, getSettings, resetToolbarT
     if (els.toolbar) {
       els.toolbar.classList.remove('hidden-bar');
       ui.setContainerFocusable(els.toolbar, els.toolbar.classList.contains('expanded'));
+      syncMobileSheetHeight();
     }
   }
 
@@ -187,6 +216,7 @@ export function createReaderNavigation(context, { ui, getSettings, resetToolbarT
     isMobileSheetLayout,
     resetToolbarTimer,
     syncLayoutOnResize,
+    syncMobileSheetHeight,
     toggleMobileSheet
   };
 }

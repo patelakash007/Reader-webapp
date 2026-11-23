@@ -1,12 +1,12 @@
-const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const {
   ensureOutputDir,
   findBrowserExecutable,
+  getAppModuleFiles,
   launchChromiumWithFallback,
+  loadPlaywright,
   outputDir,
-  rootDir,
   startStaticServer,
   waitForServer,
   writeJson
@@ -14,18 +14,6 @@ const {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
-}
-
-function loadPlaywright() {
-  for (const packageName of ['playwright-core', 'playwright']) {
-    try {
-      return { packageName, module: require(packageName) };
-    } catch (error) {
-      if (error.code !== 'MODULE_NOT_FOUND') throw error;
-    }
-  }
-
-  return null;
 }
 
 function capturePageErrors(page, target) {
@@ -189,11 +177,7 @@ async function runDeepPlaywrightChecks() {
     const title = await page.title();
     await page.waitForSelector('#app');
     assert(/Reader Webapp/i.test(title), `Unexpected page title: ${title}`);
-    const srcDir = path.join(rootDir, 'src');
-    const moduleFiles = [
-      ...fs.readdirSync(srcDir).filter(f => f.endsWith('.mjs')).sort().map(f => `./src/${f}`),
-      './vendor/marked.esm.mjs'
-    ];
+    const moduleFiles = getAppModuleFiles();
     const moduleStatuses = await page.evaluate(async files => Promise.all(files.map(async file => {
       const response = await fetch(file, { cache: 'no-store' });
       return { file, status: response.status };

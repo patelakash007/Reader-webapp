@@ -1,23 +1,22 @@
 export const VALID_SIZES = new Set(['small', 'medium', 'large', 'xl']);
 export const MAX_EXTRACTED_TEXT_CHARS = 1_000_000;
 
-export const VALID_FONTS = new Set(['sans', 'serif', 'system', 'mono']);
+export const DEFAULT_LINE_HEIGHT = 1.85;
+export const DEFAULT_LETTER_SPACING = -0.015;
+export const DEFAULT_MARGIN = 24;
+export const DEFAULT_VOICE_RATE = 1.0;
+
+export const VALID_FONTS = new Set(['sans', 'serif', 'mono']);
 
 const SERIF_STACK = 'Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif';
 const SANS_STACK = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 const MONO_STACK = 'ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Monaco, Consolas, monospace';
 
 export const fontMap = {
-  serif: { family: SERIF_STACK, weight: 600 },
-  sans: { family: SANS_STACK, weight: 600 },
-  system: { family: SANS_STACK, weight: 600 },
-  mono: { family: MONO_STACK, weight: 600 }
+  serif: SERIF_STACK,
+  sans: SANS_STACK,
+  mono: MONO_STACK
 };
-
-export const VALID_THEMES = new Set([
-  'claude', 'zen', 'stark', 'paper', 'cream', 'kindle', 'github', 'amber', 'newspaper', 'lavender',
-  'dark', 'void', 'carbon', 'midnight', 'obsidian', 'dracula', 'nord', 'catppuccin', 'forest', 'ink'
-]);
 
 export const THEME_COLORS = {
   claude: '#faf8f5',
@@ -41,6 +40,8 @@ export const THEME_COLORS = {
   forest: '#1c2e1c',
   ink: '#0f172a'
 };
+
+export const VALID_THEMES = new Set(Object.keys(THEME_COLORS));
 
 export const lightPresets = [
   { name: 'Claude', font: 'sans', theme: 'claude', desc: 'Clean warm system sans' },

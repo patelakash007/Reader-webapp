@@ -1,3 +1,9 @@
+import {
+  DEFAULT_LETTER_SPACING,
+  DEFAULT_LINE_HEIGHT,
+  DEFAULT_MARGIN,
+  DEFAULT_VOICE_RATE
+} from './constants.mjs';
 import { createAppContext } from './context.mjs';
 import { collectElements } from './dom.mjs';
 import { createParser } from './parser.mjs';
@@ -37,7 +43,8 @@ export function init(documentObject = document) {
   let reader;
   const settings = createSettings(context, {
     isMobileSheetLayout: () => reader && reader.isMobileSheetLayout(),
-    onResetToolbarTimer: () => reader && reader.resetToolbarTimer()
+    onResetToolbarTimer: () => reader && reader.resetToolbarTimer(),
+    onSettingsSectionToggle: () => reader && reader.syncMobileSheetHeight()
   });
   reader = createReader(context, {
     getSettings: () => settings,
@@ -53,7 +60,6 @@ export function init(documentObject = document) {
   tts.bindEvents();
 
   settings.resetSettingsSections();
-  context.state.smartHeadings = true;
   settings.setMode('light', { presetIndex: 0, resetTimer: false });
   settings.setSize('medium');
   reader.toggleClearBtn();
@@ -65,22 +71,20 @@ export function init(documentObject = document) {
     ui.setContainerFocusable(els.audioPlayerBar, false);
   }
 
-  const defaultLineHeight = 1.85;
-  if (els.lineHeightInput) els.lineHeightInput.value = defaultLineHeight;
-  if (els.readerContent && els.readerContent.style) els.readerContent.style.lineHeight = defaultLineHeight;
+  settings.setLineHeight(DEFAULT_LINE_HEIGHT);
+  settings.setLetterSpacing(DEFAULT_LETTER_SPACING);
+  if (els.marginInput) els.marginInput.value = DEFAULT_MARGIN;
+  settings.updateMarginStyle(DEFAULT_MARGIN);
 
-  const defaultLetterSpacing = -0.015;
-  if (els.letterSpacingInput) els.letterSpacingInput.value = defaultLetterSpacing;
-  if (els.readerContent && els.readerContent.style) els.readerContent.style.letterSpacing = `${defaultLetterSpacing}em`;
-
-  const defaultMargin = 24;
-  if (els.marginInput) els.marginInput.value = defaultMargin;
-  settings.updateMarginStyle(defaultMargin);
-
-  const defaultVoiceRate = 1.0;
-  if (els.voiceRateInput) els.voiceRateInput.value = defaultVoiceRate;
-  if (els.voiceRateVal) els.voiceRateVal.textContent = `${defaultVoiceRate.toFixed(1)}x`;
-  if (els.audioSpeedBtn) els.audioSpeedBtn.textContent = `${defaultVoiceRate.toFixed(1)}x`;
+  const rateText = `${DEFAULT_VOICE_RATE.toFixed(1)}x`;
+  if (els.voiceRateInput) els.voiceRateInput.value = DEFAULT_VOICE_RATE;
+  if (els.voiceRateVal) els.voiceRateVal.textContent = rateText;
+  if (els.audioSpeedBtn) {
+    els.audioSpeedBtn.textContent = rateText;
+    if (typeof els.audioSpeedBtn.setAttribute === 'function') {
+      els.audioSpeedBtn.setAttribute('aria-label', `Narration speed: ${rateText}`);
+    }
+  }
 
   tts.initializeVoices();
   return { context, parser, reader, settings, tts, ui };

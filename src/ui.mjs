@@ -1,3 +1,5 @@
+import { getDoc } from './utils.mjs';
+
 export function createUI(context) {
   const { els, state } = context;
   let announceTimer = null;
@@ -20,8 +22,13 @@ export function createUI(context) {
       clearStatus();
       return;
     }
-    updateStatusTarget(els.statusMessage, message, type);
-    updateStatusTarget(els.readerStatusMessage, message, type);
+    const isReaderActive = Boolean(els.readerView && els.readerView.classList && els.readerView.classList.contains('active'));
+    const activeTarget = isReaderActive
+      ? (els.readerStatusMessage || els.statusMessage)
+      : (els.statusMessage || els.readerStatusMessage);
+    const inactiveTarget = activeTarget === els.readerStatusMessage ? els.statusMessage : els.readerStatusMessage;
+    updateStatusTarget(inactiveTarget, '', 'info');
+    updateStatusTarget(activeTarget, message, type);
     if (typeof window !== 'undefined' && window.clearTimeout) {
       window.clearTimeout(state.statusTimer);
       state.statusTimer = window.setTimeout(clearStatus, 4500);
@@ -39,12 +46,8 @@ export function createUI(context) {
     if (els.loader) els.loader.classList.remove('active');
   }
 
-  function getDoc() {
-    return context.doc || (typeof document !== 'undefined' ? document : null);
-  }
-
   function announceLive(msg) {
-    const doc = getDoc();
+    const doc = getDoc(context);
     if (!doc || !doc.body) return;
     let live = doc.getElementById('liveAnnouncer');
     if (!live) {
@@ -78,7 +81,7 @@ export function createUI(context) {
       }
     }
     if (typeof container.querySelectorAll !== 'function') return;
-    container.querySelectorAll('button, input, [tabindex], select').forEach(element => {
+    container.querySelectorAll('a[href], button, input, select, textarea, [tabindex]').forEach(element => {
       if (enabled) {
         if (element.dataset.savedTabindex !== undefined) {
           const previous = element.dataset.savedTabindex;

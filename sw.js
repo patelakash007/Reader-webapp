@@ -1,7 +1,7 @@
 'use strict';
 
 // Bump CACHE_NAME whenever APP_SHELL files change so updates install into a fresh cache atomically.
-const CACHE_NAME = 'reader-webapp-shell-v13';
+const CACHE_NAME = 'reader-webapp-shell-v14';
 const CACHE_PREFIX = 'reader-webapp-';
 const APP_SHELL = [
   './',
@@ -91,11 +91,6 @@ async function cacheCanonicalNavigation(cache, request, response) {
 }
 
 async function navigationResponse(request) {
-  const url = new URL(request.url);
-  if (url.origin !== self.location.origin || !url.href.startsWith(self.registration.scope)) {
-    return fetch(request);
-  }
-
   const canonicalNavigation = isCanonicalNavigation(request);
   const cache = await caches.open(CACHE_NAME);
 

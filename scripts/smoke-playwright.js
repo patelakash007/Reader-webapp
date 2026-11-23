@@ -1,27 +1,15 @@
-const fs = require('node:fs');
 const path = require('node:path');
 const {
   ensureOutputDir,
   findBrowserExecutable,
+  getAppModuleFiles,
   launchChromiumWithFallback,
+  loadPlaywright,
   outputDir,
-  rootDir,
   startStaticServer,
   waitForServer,
   writeJson
 } = require('./browser-smoke-utils');
-
-function loadPlaywright() {
-  for (const packageName of ['playwright-core', 'playwright']) {
-    try {
-      return { packageName, module: require(packageName) };
-    } catch (error) {
-      if (error.code !== 'MODULE_NOT_FOUND') throw error;
-    }
-  }
-
-  return null;
-}
 
 async function runPlaywrightSmoke() {
   ensureOutputDir();
@@ -44,9 +32,6 @@ async function runPlaywrightSmoke() {
 
   try {
     await waitForServer(url);
-    if (localServer.reusedExistingServer) {
-      console.log(`Reusing existing local server at ${url}`);
-    }
     const launched = await launchChromiumWithFallback(playwright, detectedExecutable);
     browser = launched.browser;
     browserExecutable = launched.browserExecutable;
@@ -70,11 +55,7 @@ async function runPlaywrightSmoke() {
       throw new Error(`Unexpected page title: ${title}`);
     }
 
-    const srcDir = path.join(rootDir, 'src');
-    const moduleFiles = [
-      ...fs.readdirSync(srcDir).filter(f => f.endsWith('.mjs')).sort().map(f => `./src/${f}`),
-      './vendor/marked.esm.mjs'
-    ];
+    const moduleFiles = getAppModuleFiles();
     const moduleRequests = await page.evaluate(async files => {
       const responses = await Promise.all(files.map(async file => {
         const response = await fetch(file, { cache: 'no-store' });

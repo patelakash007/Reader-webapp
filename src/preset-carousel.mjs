@@ -60,38 +60,13 @@ export function createPresetCarousel(context, { getPresets, applyPreset, setMode
     updatePresetA11y();
   }
 
-  function nextPreset() {
-    const list = getPresets();
-    if (state.currentPresetIndex >= list.length - 1 && typeof setMode === 'function') {
-      const nextMode = state.currentMode === 'dark' ? 'light' : 'dark';
-      setMode(nextMode, { presetIndex: 0 });
-      const newList = getPresets();
-      showGestureHint(newList[0].name);
-      return;
+  function showGestureHint(preset) {
+    if (!els.gestureHintText || !els.gestureHint || !preset) return;
+    els.gestureHintText.textContent = preset.name;
+    if (els.gestureHintSub) {
+      const modeLabel = state.currentMode === 'dark' ? 'Dark' : 'Light';
+      els.gestureHintSub.textContent = preset.desc ? `${modeLabel} · ${preset.desc}` : modeLabel;
     }
-    state.currentPresetIndex = (state.currentPresetIndex + 1) % list.length;
-    applyPreset(state.currentPresetIndex);
-    showGestureHint(list[state.currentPresetIndex].name);
-  }
-
-  function prevPreset() {
-    const list = getPresets();
-    if (state.currentPresetIndex <= 0 && typeof setMode === 'function') {
-      const nextMode = state.currentMode === 'dark' ? 'light' : 'dark';
-      const targetList = nextMode === 'dark' ? darkPresets : lightPresets;
-      const lastIndex = targetList.length - 1;
-      setMode(nextMode, { presetIndex: lastIndex });
-      showGestureHint(targetList[lastIndex].name);
-      return;
-    }
-    state.currentPresetIndex = (state.currentPresetIndex - 1 + list.length) % list.length;
-    applyPreset(state.currentPresetIndex);
-    showGestureHint(list[state.currentPresetIndex].name);
-  }
-
-  function showGestureHint(text) {
-    if (!els.gestureHintText || !els.gestureHint) return;
-    els.gestureHintText.textContent = text;
     els.gestureHint.classList.add('show');
     const safeClearTimeout = (typeof window !== 'undefined' && typeof window.clearTimeout === 'function') ? window.clearTimeout : (typeof clearTimeout === 'function' ? clearTimeout : null);
     const safeSetTimeout = (typeof window !== 'undefined' && typeof window.setTimeout === 'function') ? window.setTimeout : (typeof setTimeout === 'function' ? setTimeout : null);
@@ -99,15 +74,45 @@ export function createPresetCarousel(context, { getPresets, applyPreset, setMode
     if (safeSetTimeout) {
       state.gestureHintTimer = safeSetTimeout(() => {
         if (els.gestureHint) els.gestureHint.classList.remove('show');
-      }, 700);
+      }, 900);
     }
+  }
+
+  function nextPreset(options = {}) {
+    const showHint = options.showHint !== false;
+    const list = getPresets();
+    if (state.currentPresetIndex >= list.length - 1 && typeof setMode === 'function') {
+      const nextMode = state.currentMode === 'dark' ? 'light' : 'dark';
+      setMode(nextMode, { presetIndex: 0 });
+      if (showHint) showGestureHint(getPresets()[0]);
+      return;
+    }
+    state.currentPresetIndex = (state.currentPresetIndex + 1) % list.length;
+    applyPreset(state.currentPresetIndex);
+    if (showHint) showGestureHint(list[state.currentPresetIndex]);
+  }
+
+  function prevPreset(options = {}) {
+    const showHint = options.showHint !== false;
+    const list = getPresets();
+    if (state.currentPresetIndex <= 0 && typeof setMode === 'function') {
+      const nextMode = state.currentMode === 'dark' ? 'light' : 'dark';
+      const targetList = nextMode === 'dark' ? darkPresets : lightPresets;
+      const lastIndex = targetList.length - 1;
+      setMode(nextMode, { presetIndex: lastIndex });
+      if (showHint) showGestureHint(targetList[lastIndex]);
+      return;
+    }
+    state.currentPresetIndex = (state.currentPresetIndex - 1 + list.length) % list.length;
+    applyPreset(state.currentPresetIndex);
+    if (showHint) showGestureHint(list[state.currentPresetIndex]);
   }
 
   function getCarouselWidth() {
     return els.presetWindow ? (els.presetWindow.getBoundingClientRect().width || 1) : 1;
   }
 
-  function updateCarouselDrag() {
+  function renderCarouselDrag() {
     carouselRafId = null;
     if (!state.isDraggingCarousel || !els.presetTrack) return;
     let distance = state.dragCurrentX - state.dragStartX;
@@ -115,8 +120,13 @@ export function createPresetCarousel(context, { getPresets, applyPreset, setMode
     if ((state.dragStartIndex === 0 && distance > 0) || (state.dragStartIndex === list.length - 1 && distance < 0)) distance *= 0.35;
     const percentage = (distance / state.carouselWidth) * 100;
     els.presetTrack.style.transform = `translate3d(${(-state.dragStartIndex * 100) + percentage}%, 0, 0)`;
-    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-      carouselRafId = window.requestAnimationFrame(updateCarouselDrag);
+  }
+
+  function moveCarouselDrag(x) {
+    if (!state.isDraggingCarousel) return;
+    state.dragCurrentX = x;
+    if (carouselRafId === null && typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      carouselRafId = window.requestAnimationFrame(renderCarouselDrag);
     }
   }
 
@@ -134,9 +144,6 @@ export function createPresetCarousel(context, { getPresets, applyPreset, setMode
       window.cancelAnimationFrame(carouselRafId);
       carouselRafId = null;
     }
-    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-      carouselRafId = window.requestAnimationFrame(updateCarouselDrag);
-    }
   }
 
   function endCarouselDrag() {
@@ -152,13 +159,13 @@ export function createPresetCarousel(context, { getPresets, applyPreset, setMode
     const list = getPresets();
     if (distance < -threshold) {
       if (state.currentPresetIndex >= list.length - 1 && typeof setMode === 'function') {
-        nextPreset();
+        nextPreset({ showHint: false });
         return;
       }
       if (state.currentPresetIndex < list.length - 1) state.currentPresetIndex += 1;
     } else if (distance > threshold) {
       if (state.currentPresetIndex <= 0 && typeof setMode === 'function') {
-        prevPreset();
+        prevPreset({ showHint: false });
         return;
       }
       if (state.currentPresetIndex > 0) state.currentPresetIndex -= 1;
@@ -280,18 +287,15 @@ export function createPresetCarousel(context, { getPresets, applyPreset, setMode
     attachGestureArea,
     buildPresetCarousel,
     canStartCarouselDrag,
-    canStartPresetGesture,
     canUseGlobalPresetShortcut,
     endCarouselDrag,
-    getCarouselWidth,
     hasSelectedText,
     isBlockedGestureTarget,
+    moveCarouselDrag,
     nextPreset,
     prevPreset,
     setTrackPosition,
-    showGestureHint,
     startCarouselDrag,
-    updateCarouselDrag,
     updateDots,
     updatePresetA11y,
     updateThemeSettingsSummary

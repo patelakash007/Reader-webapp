@@ -39,9 +39,6 @@ async function runChromiumSmoke() {
 
   try {
     await waitForServer(url);
-    if (localServer.reusedExistingServer) {
-      console.log(`Reusing existing local server at ${url}`);
-    }
     const screenshotPath = path.join(outputDir, 'chromium-smoke.png');
     const htmlPath = path.join(outputDir, 'chromium-smoke.html');
     const commonArgs = [
