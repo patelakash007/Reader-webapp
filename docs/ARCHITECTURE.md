@@ -29,6 +29,8 @@ flowchart TD
     TTSCtrl --> TTSCore
 ```
 
+*Cross-cutting leaf modules `src/constants.mjs` and `src/utils.mjs` are imported across the graph and omitted from the diagram for clarity.*
+
 ## Bootstrap & Shared Context
 
 1. **`index.html`** loads `style.css` and defers `script.js`.
@@ -36,9 +38,9 @@ flowchart TD
 3. **`src/app.mjs`** guards initialization per document via a `WeakSet` (`initializedDocuments`) so a document is never initialized twice while unit tests can safely initialize distinct mock documents. It:
    - Collects DOM references via `collectElements()` (`src/dom.mjs`).
    - Builds the shared state/runtime container via `createAppContext()` (`src/context.mjs`).
-   - Instantiates `ui`, `tts`, `parser`, `settings`, and `reader` with explicit dependency injection (avoiding global singletons).
-   - Runs `cleanupLegacyBrowserStorage()` (`src/storage.mjs`) and registers `./sw.js` with `{ updateViaCache: 'none' }`.
-   - Binds events and applies clean default values (`light` mode, preset `0` `Claude`, size `medium`, line height `1.85`, letter spacing `-0.015em`, margins `24px`, voice rate `1.0x`, `smartHeadings: true`).
+   - Instantiates `ui`, `tts`, `parser`, `settings` (wired with `onSettingsSectionToggle` → `reader.syncMobileSheetHeight()`), and `reader` with explicit dependency injection (avoiding global singletons).
+   - Runs `cleanupLegacyBrowserStorage()` (`src/storage.mjs`) and registers `./sw.js` with `{ updateViaCache: 'none' }` (immediately if `document.readyState === 'complete'`, otherwise on `window` `load`).
+   - Binds events, disables initial focusability on `#toolbar` and `#audioPlayerBar`, applies clean default values (`light` mode, preset `0` `Claude`, size `medium`, line height `1.85`, letter spacing `-0.015em`, margins `24px`, voice rate `1.0x`, `smartHeadings: true`) along with their live UI readouts, and initializes Web Speech voices (`tts.initializeVoices()`).
 
 ### State Structure (`src/context.mjs`)
 
@@ -51,22 +53,22 @@ flowchart TD
 | Module | Responsibility |
 | --- | --- |
 | `app.mjs` | Composition root, default initialization, and service worker registration |
-| `constants.mjs` | Character limit (`1,000,000`), valid fonts/sizes/themes, `THEME_COLORS`, 20 presets (`lightPresets`, `darkPresets`), and TTS timing/chunk constants |
+| `constants.mjs` | Character limit (`1,000,000`), valid fonts/sizes/themes, `THEME_COLORS`, 20 presets (`lightPresets`, `darkPresets`), and TTS timing/chunk/speed constants |
 | `context.mjs` | Shared per-document `state` and `runtime` container |
 | `dom.mjs` | Centralized DOM lookup (`collectElements`) |
 | `markdown-parser.mjs` | Custom `Marked` instance, URL allowlisting, HTML escaping, heading ID slugification & deduplication, reserved ID protection, and smart heading heuristics |
 | `parser.mjs` | Parser facade and `enforceExtractedTextLimit()` |
-| `preset-carousel.mjs` | Preset track animation, drag physics, touch/mobile swipe gestures, and keyboard shortcut eligibility |
-| `reader-navigation.mjs` | Mobile bottom sheet dialog semantics (`role="dialog"`, `aria-modal="true"`), focus trap, scroll lock, and viewport resize synchronization |
-| `reader-renderer.mjs` | Asynchronous, frame-budgeted Markdown token rendering with render-ID cancellation |
-| `reader.mjs` | View switching (`enterReader`/`goBack`), scroll progress bar, desktop toolbar auto-hide/hover lock, click-to-speak gating, and global keyboard handling |
-| `settings.mjs` | Font, theme, `theme-color` meta sync, size, line height, letter spacing, responsive margin capping, and accordion section expansion |
+| `preset-carousel.mjs` | Preset track animation, on-demand rAF drag physics, touch/mobile swipe gestures, gesture hint toast (`<Mode> · <desc>`), and keyboard shortcut eligibility |
+| `reader-navigation.mjs` | Mobile bottom sheet dialog semantics (`role="dialog"`, `aria-modal="true"`), `--mobile-sheet-height` CSS variable sync, focus trap, scroll lock, and viewport resize synchronization |
+| `reader-renderer.mjs` | Asynchronous, frame-budgeted Markdown token rendering with render-ID cancellation and threshold-gated loading overlay |
+| `reader.mjs` | View switching (`enterReader`/`goBack`), scroll progress bar, desktop/tablet toolbar auto-hide/hover lock and tap-reveal guards, click-to-speak gating, and global keyboard handling |
+| `settings.mjs` | Font, theme, `theme-color` meta sync, size, live typography readouts (`line-height`, `letter-spacing`, responsive margin cap), exclusive accordion toggling, and `.tts-interactive` class sync |
 | `storage.mjs` | Targeted removal of 16 legacy `reader_*` keys from `localStorage` and `sessionStorage` |
 | `tts-core.mjs` | 190-character boundary chunking, voice deduplication/sorting/selection, and non-destructive DOM word tokenization |
-| `tts-controller.mjs` | Web Speech API playback state machine, word highlighting, fallback estimation timer, desktop keep-alive, and page visibility/hide recovery |
+| `tts-controller.mjs` | Web Speech API playback state machine, inline SVG play/pause icons, word highlighting, fallback estimation timer, desktop keep-alive, and page visibility/hide recovery |
 | `tts.mjs` | Public facade re-exporting `createTTS` and `tts-core.mjs` helpers |
-| `ui.mjs` | Status banners, loading overlay, polite `aria-live` announcer (`#liveAnnouncer`), and `inert`/`tabindex` focusability management |
-| `utils.mjs` | `escapeHtml`, `formatError`, numeric/index clamping, `getElementTarget`, `getScrollTop`, capability-based `isMobileDevice`, and `cancelPendingRender` |
+| `ui.mjs` | Single-active-banner status routing (`#statusMessage` / `#readerStatusMessage`), loading overlay, debounced polite `aria-live` announcer (`#liveAnnouncer`), and `inert`/`tabindex` focusability management |
+| `utils.mjs` | `escapeHtml`, `formatError`, numeric/index clamping, `getElementTarget`, `getScrollTop`, capability-based `isMobileDevice`, `getDoc`, `isListenSectionOpen`, and `cancelPendingRender` |
 
 ## Markdown Parsing & Security Pipeline
 
@@ -86,18 +88,19 @@ All pasted input flows through `enforceExtractedTextLimit()` (enforcing `MAX_EXT
 
 `src/reader-renderer.mjs` prevents UI freezes on large documents:
 
-- Each `renderTextAsync()` call increments `runtime.reader.activeRenderId` and invalidates any previous TTS tokenization.
+- Each `renderTextAsync()` call increments `runtime.reader.activeRenderId`, invalidates any previous TTS tokenization, and defers tokenization via `setTimeout(..., 0)` so initial UI state settles cleanly.
+- To avoid loader flicker on short pastes, the loading overlay is shown immediately only when input exceeds `LOADER_CHAR_THRESHOLD = 50_000` characters, or lazily if chunked rendering yields across multiple frames.
 - Tokens are sliced and rendered incrementally via `insertAdjacentHTML('beforeend', html)` using a **12 ms** frame budget and a **30,000-character** per-frame cap, yielding via `requestAnimationFrame` (or `setTimeout(..., 0)` in non-browser environments).
 - Every async step checks `renderId === runtime.reader.activeRenderId`. Calling `goBack()`, `clearText()`, or starting another render increments `activeRenderId`, immediately aborting in-flight work so stale DOM or callbacks cannot leak.
 
 ## Responsive Layout, Theming & Accessibility
 
-- **20 Themes (`style.css` + `src/constants.mjs`):** All 10 light and 10 dark presets use CSS custom properties (`--bg`, `--card`, `--text`, `--text2`, `--accent`, `--on-accent`, `--toolbar-bg`) with `color-mix()` tinting, tested in `tests/test_regressions.js` for WCAG AA (`>= 4.5:1`) contrast. Applying a preset also updates `<meta name="theme-color">`.
+- **20 Themes (`style.css` + `src/constants.mjs`):** `:root` defaults match the `Claude` preset (eliminating cold-load flash before JS executes). All 10 light and 10 dark presets define CSS custom properties (`--bg`, `--card`, `--text`, `--text2`, `--accent`, `--on-accent`, `--ui-positive`, `--ui-negative`, `--toolbar-bg`) with `color-mix()` tinting and a subtle SVG paper-grain overlay on `body::before` behind `#app` (`z-index: 0`). Contrast is verified in `tests/test_regressions.js` for WCAG AA (`>= 4.5:1`). Applying a preset also updates `<meta name="theme-color">`.
 - **Responsive breakpoints (`style.css`):**
-  - **Desktop (`> 960px`):** 3-column floating settings cards inside an auto-hiding fixed top shelf (exclusive accordion, 3.5 s idle timer paused on pointer hover or keyboard focus, revealed on top-edge mouse move, tap, or `Tab`).
+  - **Desktop (`> 960px`):** 3-column floating settings cards inside an auto-hiding fixed top shelf (exclusive accordion, 3.5 s idle timer paused on pointer hover or keyboard focus, revealed on top-edge mouse move `<= 80px`, guarded click/tap, or `Tab`). Tap-reveal ignores active text selections, `#` anchor links, `touchstart` scrolling, and active click-to-speak regions.
   - **Tablet (`641px–960px`):** 2-column dense settings grid with full-width active section and exclusive accordion.
-  - **Mobile (`<= 640px`):** Floating action button (`#mobileFab`) toggles `#toolbar` as a modal bottom sheet (`role="dialog"`, `aria-modal="true"`) with scroll lock (`body.mobile-sheet-active`), backdrop dismissal, focus restoration (`runtime.reader.lastActiveElement`), and a keyboard `Tab`/`Shift+Tab` focus trap that includes the anchored Close pill.
-- **Focusability & Reduced Motion:** `ui.setContainerFocusable()` toggles both `inert` and saved `tabindex` values (plus `aria-hidden` on `#toolbar` and `#audioPlayerBar`) when bars are hidden. `@media (prefers-reduced-motion: reduce)` disables CSS transitions/animations, and TTS auto-scroll switches from `smooth` to `auto`.
+  - **Mobile (`<= 640px`):** Floating action button (`#mobileFab`) toggles `#toolbar` as a modal bottom sheet (`role="dialog"`, `aria-modal="true"`) with scroll lock (`body.mobile-sheet-active`), backdrop/handle dismissal, dynamic `--mobile-sheet-height` syncing so the Close pill anchors cleanly above the sheet across accordion toggles and resizes, focus restoration (`runtime.reader.lastActiveElement`), and a keyboard `Tab`/`Shift+Tab` focus trap that includes the anchored Close pill.
+- **Focusability, Status & Reduced Motion:** `ui.setContainerFocusable()` toggles both `inert` and saved `tabindex` values (and toggles `aria-hidden` on `#toolbar`), while `#audioPlayerBar` updates its own `aria-hidden` state via `app.mjs` and `tts-controller.mjs`. `ui.showStatus()` updates only the active view's status banner (`#readerStatusMessage` in reader mode, `#statusMessage` otherwise) and clears the inactive banner to prevent duplicate `aria-live` announcements. `@media (prefers-reduced-motion: reduce)` disables CSS transitions/animations, and TTS auto-scroll switches from `smooth` to `auto` when reduced motion is enabled or narration speed exceeds `1.5x`.
 
 ## Text-to-Speech (TTS) Engine
 
@@ -112,7 +115,7 @@ The TTS subsystem is split into pure helpers (`src/tts-core.mjs`) and the statef
   - Voice loading listens to `onvoiceschanged` and polls every `250ms` up to `5000ms`, deduplicating and sorting voices and matching the user's locale.
   - On desktop, a `10000ms` keep-alive calls `synth.pause(); synth.resume()` to work around Chromium speech stalls.
   - On touch-primary mobile devices (`isMobileDevice()`), pausing cancels the utterance and resuming restarts cleanly from `currentWordIndex`.
-  - `visibilitychange` and `pagehide` pause active playback; if hidden for more than `15000ms`, pending speech is canceled and marked for clean word-index restart on resume.
+  - `visibilitychange` (when hidden) pauses active playback and flags `visibilityInterrupted` so resuming restarts cleanly from `currentWordIndex`. `pagehide` also pauses playback and starts a `15000ms` (`PAGEHIDE_CANCEL_TIMEOUT`) timer—cleared on `pageshow`, resume, or stop—that cancels pending speech and sets `speechCanceledWhileHidden`. On desktop, any pause lasting longer than `10000ms` likewise restarts cleanly from `currentWordIndex` on resume.
 
 ## Service Worker & Storage Isolation
 
@@ -128,3 +131,12 @@ The TTS subsystem is split into pure helpers (`src/tts-core.mjs`) and the statef
 ### Legacy Storage Cleanup (`src/storage.mjs`)
 
 Reader Webapp stores no user content or preferences in browser storage. On startup, `cleanupLegacyBrowserStorage()` deletes only 16 explicitly listed legacy `reader_*` keys from `localStorage` and `sessionStorage`, catching access or quota errors independently per storage area and preserving all unrelated keys on the same origin.
+
+## Verification Layers
+
+Automated checks in `.github/workflows/quality-checks.yml` span four layers:
+
+1. **Static hygiene & lint:** Required-file, CSP, and no-CDN checks, ESM syntax/import/export validation (`scripts/check-syntax.js`), and pinned ESLint (`8.57.1`).
+2. **PWA & service worker integrity:** Manifest, icon, and `APP_SHELL` module-graph completeness (`scripts/validate-pwa.js`) plus simulated SW install/activate/fetch tests (`tests/test_pwa.js`).
+3. **Node unit, regression, stress & storage suites:** Lightweight DOM-mocked (`tests/mock_dom.js`) unit, TTS controller, CSS/WCAG contrast/UI regression (`tests/test_regressions.js`), large-document stress (`tests/test_empirical_stress.js`), and storage-isolation (`tests/test_storage.js`) tests.
+4. **Headless browser E2E checks:** Desktop and mobile Playwright smoke (`scripts/smoke-playwright.js`) and deep E2E regression (`scripts/deep-playwright.js`) suites running against an in-process static server (`scripts/browser-smoke-utils.js`).

@@ -11,10 +11,10 @@ A lightweight, local-first browser reader for copied text and Markdown. Paste co
 - **20 WCAG AA reading presets (10 Light, 10 Dark).**
   - **Light:** Claude *(default)*, Zen, Stark, Book, Classic, Kindle, GitHub, Amber, Newspaper, Lavender.
   - **Dark:** Night, Void, Carbon, Midnight, Obsidian, Dracula, Nord, Catppuccin, Forest, Ink.
-  - Presets use local system font stacks (`sans`, `serif`, `mono`), meet WCAG AA contrast (`>= 4.5:1`), dynamically update the browser `theme-color`, and cycle seamlessly across Light and Dark modes.
-- **Tunable typography & responsive reading layout.** Adjust text size (`S`, `M`, `L`, `XL`), line height (`1.4`–`2.6`), letter spacing (`-0.03em`–`0.15em`), and margins (`12px`–`80px`, capped on narrow viewports to preserve readability). Includes a top reading progress bar, an auto-hiding desktop toolbar, a 2-column tablet settings layout (`641px`–`960px`), and an accessible mobile bottom sheet (`<= 640px`) with focus trapping and scroll locking.
-- **Browser Text-to-Speech (TTS).** Uses the Web Speech API with lazy non-destructive DOM word tokenization, active word highlighting, reduced-motion-aware auto-scrolling, click-to-speak (when TTS is active or the Speech panel is open), voice selection, speed controls (`0.5x`–`2.5x` slider and floating player speed chip cycling `0.8x`–`2.0x`), 190-character boundary chunking, and fallback timing when browsers do not emit word-boundary events. Voice availability and audio behavior depend on the browser and OS.
-- **Incremental rendering for large pastes.** Accepts up to **1,000,000 characters** and renders Markdown tokens incrementally across animation frames so the UI remains responsive.
+  - `:root` defaults match the `Claude` preset to prevent cold-load flash. Presets use local system font stacks (`sans`, `serif`, `mono`), crisp inline SVG controls, WCAG AA contrast (`>= 4.5:1`), dynamic browser `theme-color` updates, and seamless cycling across Light and Dark modes with a brief preset hint overlay.
+- **Tunable typography & responsive reading layout.** Adjust text size (`S`, `M`, `L`, `XL`), line height (`1.4`–`2.6`), letter spacing (`-0.03em`–`0.15em`), and margins (`12px`–`80px`, capped on narrow viewports to preserve readability) with live numeric value readouts. Includes a top reading progress bar, compact 3-column floating settings cards on desktop (`> 960px`) and a 2-column dense settings grid on tablet (`641px`–`960px`) inside an auto-hiding top shelf with an exclusive accordion, plus an accessible mobile bottom sheet (`<= 640px`) with focus trapping, scroll locking, and a dynamically anchored Close pill.
+- **Browser Text-to-Speech (TTS).** Uses the Web Speech API with lazy non-destructive DOM word tokenization, active word highlighting, reduced-motion- and fast-rate-aware auto-scrolling, click-to-speak (when TTS is active or the **Speech (TTS)** panel is open), voice selection, speed controls (`0.5x`–`2.5x` slider with live readout and floating player speed chip cycling `0.8x`, `1.0x`, `1.2x`, `1.5x`, `1.8x`, `2.0x`), 190-character boundary chunking, and fallback timing when browsers do not emit word-boundary events. Voice availability and audio behavior depend on the browser and OS.
+- **Incremental rendering for large pastes.** Accepts up to **1,000,000 characters** and renders Markdown tokens incrementally across animation frames so the UI remains responsive. A loading overlay appears automatically for pastes over 50,000 characters or renders spanning multiple frames.
 - **Installable offline-capable PWA.** Caches the static application shell via a service worker (`sw.js`) for offline reopening after the first successful visit.
 
 ### Deliberately out of scope
@@ -25,19 +25,20 @@ Reader Webapp is intentionally focused on ephemeral pasted text and Markdown. It
 
 1. Open the [live app](https://patelakash007.github.io/Reader-webapp/) (or run locally).
 2. Paste plain text or Markdown into the input area and select **Read Text**.
-3. Open **Reading Settings** (auto-hiding top bar on desktop/tablet, floating settings button on mobile) to switch themes, adjust typography, or open **Speech (TTS)**.
+3. Open **Reading Settings** (auto-hiding floating top cards on desktop/tablet, floating settings button on mobile) to switch **Theme & Presets**, tune **Text** typography, or open **Speech (TTS)**.
 
 ### Keyboard shortcuts & gestures
 
 | Input | Action |
 | --- | --- |
-| `ArrowLeft` / `ArrowRight` | Cycle to the previous or next preset (wraps across Light and Dark modes; ignored while focused on interactive form controls) |
+| `ArrowLeft` / `ArrowRight` | Cycle to the previous or next preset (wraps across Light and Dark modes; ignored while focused on interactive controls or when modifier keys are held) |
 | `Enter` / `Space` *(on preset carousel)* | Re-apply the focused preset |
-| `Tab` *(desktop reader)* | Reveals the top toolbar if hidden |
-| `Escape` | Layered dismiss: closes the mobile settings sheet → blurs an active toolbar input → clears text selection → returns to the input view |
-| Swipe left / right *(touch devices)* | Cycle presets seamlessly across Light and Dark modes (blocked on code blocks, tables, interactive controls, and active text selections) |
-| Drag preset card | Drag horizontally in the preset carousel to switch presets |
-| Click / tap a word | Start TTS narration from that word when Speech (TTS) is open or playback is active |
+| `Tab` *(desktop/tablet reader)* | Reveals the auto-hidden top toolbar |
+| Hover top edge (`<= 80px`) or click page *(desktop/tablet)* | Reveals the auto-hidden top toolbar (ignored during text selection, on `#` anchor links, or when click-to-speak is active) |
+| `Escape` | Layered dismiss: closes the mobile settings sheet → blurs an active toolbar form control → clears text selection → returns to the input view |
+| Swipe left / right *(touch devices)* | Cycle presets seamlessly across Light and Dark modes (blocked on code blocks, tables, interactive controls, toolbar/audio bar/back button, and active text selections) |
+| Drag or click preset card | Drag horizontally in the preset carousel to switch presets (wraps across Light/Dark at the ends), or click a card to apply it |
+| Click / tap a word | Start TTS narration from that word when **Speech (TTS)** is open or playback is active (ignored on links, buttons, or active text selections) |
 
 ## Run Locally
 
@@ -75,17 +76,17 @@ Reader-webapp/
 │   ├── dom.mjs                           # DOM element collection
 │   ├── markdown-parser.mjs               # Marked config, sanitization, heading IDs & smart headings
 │   ├── parser.mjs                        # Parser facade & character-limit enforcement
-│   ├── preset-carousel.mjs               # Preset track drag, swipe gestures & keyboard helpers
-│   ├── reader-navigation.mjs             # Mobile bottom sheet dialog, focus trap & resize sync
+│   ├── preset-carousel.mjs               # Preset track drag, swipe gestures, hint toast & keyboard helpers
+│   ├── reader-navigation.mjs             # Mobile bottom sheet dialog, height sync, focus trap & resize sync
 │   ├── reader-renderer.mjs               # Frame-budgeted incremental Markdown DOM rendering
 │   ├── reader.mjs                        # Reader lifecycle, scroll progress & global events
-│   ├── settings.mjs                      # Theme, font, typography & settings accordion controls
+│   ├── settings.mjs                      # Theme, font, typography readouts & exclusive settings accordion
 │   ├── storage.mjs                       # Targeted cleanup of legacy reader_* storage keys
 │   ├── tts-controller.mjs                # Playback state machine, voice lifecycle & visibility handling
 │   ├── tts-core.mjs                      # 190-char chunking, voice sorting & DOM tokenization
 │   ├── tts.mjs                           # TTS module facade
-│   ├── ui.mjs                            # Status banners, loader, live announcer & focusability
-│   └── utils.mjs                         # Escaping, clamping, device detection & render cancellation
+│   ├── ui.mjs                            # Single-active status banners, loader, live announcer & focusability
+│   └── utils.mjs                         # Escaping, clamping, device/DOM helpers & render cancellation
 ├── tests/
 │   ├── mock_dom.js                       # Lightweight DOM mock for Node-based tests
 │   ├── test_empirical_stress.js          # Large-document & high-volume highlight performance tests

@@ -60,16 +60,16 @@ When making changes in specific areas, remember these invariants (enforced by te
 
 ### Adding, renaming, or editing app-shell files
 - If you add or rename a module under `src/`, an icon, or another shell asset, update `APP_SHELL` in `sw.js` (`scripts/validate-pwa.js` automatically verifies the full `src/app.mjs` module graph against `APP_SHELL`).
-- Whenever any file listed in `APP_SHELL` changes in a release-worthy way, bump `CACHE_NAME` in `sw.js` (e.g., `reader-webapp-shell-v13` → `v14`) so returning PWA clients receive updates atomically.
+- Whenever any file listed in `APP_SHELL` changes in a release-worthy way, bump `CACHE_NAME` in `sw.js` (e.g., `reader-webapp-shell-v14` → `v15`) so returning PWA clients receive updates atomically.
 
 ### Modifying HTML controls or element IDs (`index.html`)
-- Add any new element IDs to `RESERVED_DOM_IDS` in `src/markdown-parser.mjs` (lowercase) so Markdown heading slugs cannot collide with app-shell elements.
-- Ensure `<input type="range">` defaults align cleanly with their `min` and `step` attributes (checked by `tests/test_reader.js`).
-- Keep ARIA attributes, `focus-visible` outlines, and keyboard focusability (`ui.setContainerFocusable`) intact.
+- Add any new element IDs (including dynamically created ones such as `liveannouncer`) to `RESERVED_DOM_IDS` in `src/markdown-parser.mjs` (lowercase) so Markdown heading slugs cannot collide with app-shell elements.
+- Ensure `<input type="range">` defaults align cleanly with their `min` and `step` attributes (checked by `tests/test_reader.js`), and keep live value readout elements synchronized on init and input.
+- Keep ARIA attributes, `focus-visible` outlines, single-active-banner status routing, and keyboard focusability (`ui.setContainerFocusable`) intact.
 
 ### Modifying themes or styles (`style.css` / `src/constants.mjs`)
-- Keep all 20 themes (`VALID_THEMES` and `THEME_COLORS` in `src/constants.mjs`, `.theme-*` rules in `style.css`) synchronized.
-- Verify that every theme maintains **WCAG AA (`>= 4.5:1`)** contrast (checked automatically in `tests/test_regressions.js`).
+- Keep all 20 themes (`VALID_THEMES` and `THEME_COLORS` in `src/constants.mjs`, `.theme-*` rules in `style.css`) synchronized, and keep `:root` defaults and `manifest.webmanifest` aligned with the default `Claude` theme (`#faf8f5`) to prevent cold-load flash.
+- Verify that every theme maintains **WCAG AA (`>= 4.5:1`)** contrast across text, accent, and status (`--ui-positive`, `--ui-negative`) colors (checked automatically in `tests/test_regressions.js`).
 - Respect `@media (prefers-reduced-motion: reduce)` and mobile safe-area insets.
 
 ### Modifying Markdown parsing, TTS, or storage
@@ -81,6 +81,6 @@ When making changes in specific areas, remember these invariants (enforced by te
 
 1. Create a focused branch from `main`.
 2. Add or update unit/regression tests in `tests/` (or Playwright assertions in `scripts/`) for behavior changes and bug fixes.
-3. Update `README.md` or `docs/ARCHITECTURE.md` if user-facing behavior, scripts, or module architecture changes.
+3. Update `README.md`, `docs/ARCHITECTURE.md`, or `CONTRIBUTING.md` if user-facing behavior, scripts, checklists, or module architecture changes.
 4. Ensure all checks pass and review `git diff` to confirm no temporary artifacts (`output/browser-smoke/`, screenshots, logs) are staged.
 5. Open a pull request against `main` with a clear summary of the changes and verification results.
