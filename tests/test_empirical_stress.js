@@ -4,8 +4,9 @@ const assert = require('node:assert');
 const { MockDocument } = require('./mock_dom');
 
 (async () => {
-  const parser = await import('../src/parser.mjs');
-  const tts = await import('../src/tts.mjs');
+  const parser = await import('../src/markdown-parser.mjs');
+  const ttsCore = await import('../src/tts-core.mjs');
+  const { createTTS } = await import('../src/tts-controller.mjs');
   const constants = await import('../src/constants.mjs');
   const { createAppContext } = await import('../src/context.mjs');
 
@@ -17,31 +18,30 @@ const { MockDocument } = require('./mock_dom');
   const context = createAppContext({});
   assert.strictEqual(context.runtime.tts.speechGeneration, 0);
   assert.strictEqual(context.runtime.reader.activeRenderId, 0);
-  assert.strictEqual(context.state.smartHeadings, true);
   assert.strictEqual(typeof parser.parseMarkdownToHtml, 'function');
-  assert.strictEqual(typeof tts.tokenizeReaderDOM, 'function');
+  assert.strictEqual(typeof ttsCore.tokenizeReaderDOM, 'function');
   console.log('✓ Production module contracts loaded without browser globals.');
 
   console.log('\n--- 2. Chunking engine stress testing ---');
-  assert.deepStrictEqual(tts.chunkText(''), []);
+  assert.deepStrictEqual(ttsCore.chunkText(''), []);
   const exact190 = 'A'.repeat(190);
-  const res190 = tts.chunkText(exact190);
+  const res190 = ttsCore.chunkText(exact190);
   assert.strictEqual(res190.length, 1);
   assert.strictEqual(res190[0].text.length, 190);
   assert.strictEqual(res190[0].start, 0);
   assert.strictEqual(res190[0].end, 190);
   const noSpace191 = 'B'.repeat(191);
-  const res191 = tts.chunkText(noSpace191);
+  const res191 = ttsCore.chunkText(noSpace191);
   assert.deepStrictEqual(res191.map(chunk => chunk.text.length), [190, 1]);
   const sentence = 'Word1 Word2 Word3 Word4 Word5';
-  const shortChunks = tts.chunkText(sentence, 50, 15);
+  const shortChunks = ttsCore.chunkText(sentence, 50, 15);
   assert(shortChunks.length > 1);
   shortChunks.forEach(chunk => {
     assert(chunk.text.length <= 15);
     assert(chunk.start >= 50);
   });
   const complexWhitespace = 'Alpha\t\tBeta\n\nGamma   Delta\r\nEpsilon ' + 'Z'.repeat(200);
-  const complexChunks = tts.chunkText(complexWhitespace, 0, 190);
+  const complexChunks = ttsCore.chunkText(complexWhitespace, 0, 190);
   assert(complexChunks.length >= 2);
   complexChunks.forEach(chunk => assert(!chunk.text.startsWith(' ')));
   console.log('✓ Production chunking passed boundary conditions and edge cases.');
@@ -63,7 +63,7 @@ const { MockDocument } = require('./mock_dom');
   secondParagraph.appendChild(mockDocument.createTextNode('A multi-line paragraph with punctuation: Dr. Smith, U.S.A., 3.14159, and more.'));
   root.appendChild(secondParagraph);
 
-  const tokenized = tts.tokenizeReaderDOM(root, mockDocument);
+  const tokenized = ttsCore.tokenizeReaderDOM(root, mockDocument);
   assert.strictEqual(tokenized.spans.length, tokenized.meta.length);
   assert(tokenized.meta.length >= 15);
   tokenized.meta.forEach(word => {
@@ -74,7 +74,7 @@ const { MockDocument } = require('./mock_dom');
   console.log('✓ Production DOM tokenization preserved hierarchy and character offsets.');
 
   console.log('\n--- 5. Production voice selection and rate math ---');
-  const voices = tts.deduplicateAndSortVoices([
+  const voices = ttsCore.deduplicateAndSortVoices([
     { name: 'Google US', lang: 'en-US', voiceURI: 'g-us-1', default: false },
     { name: 'Google US', lang: 'en-US', voiceURI: 'g-us-2', default: false },
     { name: 'Microsoft David', lang: 'en-US', voiceURI: 'ms-david', default: true },
@@ -83,9 +83,9 @@ const { MockDocument } = require('./mock_dom');
   ]);
   assert.strictEqual(voices.length, 4);
   assert.strictEqual(voices[0].name, 'Microsoft David');
-  assert.strictEqual(tts.resolveVoiceIndex(voices, 'fr-1', 'en-US'), voices.findIndex(voice => voice.voiceURI === 'fr-1'));
-  assert.strictEqual(tts.resolveVoiceIndex(voices, null, 'en-CA'), voices.findIndex(voice => voice.lang.startsWith('en-')));
-  assert.strictEqual(tts.resolveVoiceIndex(voices, null, 'ja-JP'), 0);
+  assert.strictEqual(ttsCore.resolveVoiceIndex(voices, 'fr-1', 'en-US'), voices.findIndex(voice => voice.voiceURI === 'fr-1'));
+  assert.strictEqual(ttsCore.resolveVoiceIndex(voices, null, 'en-CA'), voices.findIndex(voice => voice.lang.startsWith('en-')));
+  assert.strictEqual(ttsCore.resolveVoiceIndex(voices, null, 'ja-JP'), 0);
   const wordsPerMs = (wordsPerMinute, rate) => (wordsPerMinute * rate) / 60000;
   assert.strictEqual(wordsPerMs(180, 2), wordsPerMs(180, 1) * 2);
   assert.strictEqual(wordsPerMs(180, 0.5), wordsPerMs(180, 1) * 0.5);
@@ -185,7 +185,7 @@ const { MockDocument } = require('./mock_dom');
   stressContext.runtime.tts.wordSpans = wordSpans;
   stressContext.runtime.tts.fullSpokenText = 'dummy text';
 
-  const ttsStress = tts.createTTS(stressContext, { ui: { showStatus() {}, announceLive() {} } });
+  const ttsStress = createTTS(stressContext, { ui: { showStatus() {}, announceLive() {} } });
 
   // 1. Parity test between binary search and linear findIndex on random offsets
   for (let trial = 0; trial < 200; trial++) {

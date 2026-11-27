@@ -81,7 +81,7 @@ function classList() {
     }
   };
   const { createAppContext } = await import('../src/context.mjs');
-  const { createTTS } = await import('../src/tts.mjs');
+  const { createTTS } = await import('../src/tts-controller.mjs');
 
   function createFixture(isMobile) {
     const synth = new FakeSynth();

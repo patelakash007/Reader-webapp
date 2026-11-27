@@ -10,23 +10,19 @@ flowchart TD
     Shim --> App[src/app.mjs]
     App --> DOM[src/dom.mjs]
     App --> Context[src/context.mjs]
-    App --> Storage[src/storage.mjs]
     App --> UI[src/ui.mjs]
-    App --> Parser[src/parser.mjs]
     App --> Settings[src/settings.mjs]
     App --> Reader[src/reader.mjs]
-    App --> TTS[src/tts.mjs]
+    App --> TTSCtrl[src/tts-controller.mjs]
     App -.-> SW[sw.js]
 
-    Parser --> MD[src/markdown-parser.mjs]
+    Reader --> MD[src/markdown-parser.mjs]
     MD --> Marked[vendor/marked.esm.mjs]
     Settings --> Carousel[src/preset-carousel.mjs]
     Reader --> Renderer[src/reader-renderer.mjs]
     Reader --> Nav[src/reader-navigation.mjs]
-    Renderer --> Parser
-    TTS --> TTSCtrl[src/tts-controller.mjs]
-    TTS --> TTSCore[src/tts-core.mjs]
-    TTSCtrl --> TTSCore
+    Renderer --> MD
+    TTSCtrl --> TTSCore[src/tts-core.mjs]
 ```
 
 *Cross-cutting leaf modules `src/constants.mjs` and `src/utils.mjs` are imported across the graph and omitted from the diagram for clarity.*
@@ -38,14 +34,14 @@ flowchart TD
 3. **`src/app.mjs`** guards initialization per document via a `WeakSet` (`initializedDocuments`) so a document is never initialized twice while unit tests can safely initialize distinct mock documents. It:
    - Collects DOM references via `collectElements()` (`src/dom.mjs`).
    - Builds the shared state/runtime container via `createAppContext()` (`src/context.mjs`).
-   - Instantiates `ui`, `tts`, `parser`, `settings` (wired with `onSettingsSectionToggle` → `reader.syncMobileSheetHeight()`), and `reader` with explicit dependency injection (avoiding global singletons).
-   - Runs `cleanupLegacyBrowserStorage()` (`src/storage.mjs`) and registers `./sw.js` with `{ updateViaCache: 'none' }` (immediately if `document.readyState === 'complete'`, otherwise on `window` `load`).
-   - Binds events, disables initial focusability on `#toolbar` and `#audioPlayerBar`, applies clean default values (`light` mode, preset `0` `Claude`, size `medium`, line height `1.85`, letter spacing `-0.015em`, margins `24px`, voice rate `1.0x`, `smartHeadings: true`) along with their live UI readouts, and initializes Web Speech voices (`tts.initializeVoices()`).
+   - Instantiates `ui`, `tts`, `settings` (wired with `onSettingsSectionToggle` → `reader.syncMobileSheetHeight()`), and `reader` with explicit dependency injection (avoiding global singletons).
+   - Registers `./sw.js` with `{ updateViaCache: 'none' }` (immediately if `document.readyState === 'complete'`, otherwise on `window` `load`).
+   - Binds events, disables initial focusability on `#toolbar` and `#audioPlayerBar`, applies clean default values (`light` mode, preset `0` `Claude`, size `medium`, line height `1.85`, letter spacing `-0.015em`, margins `24px`, voice rate `1.0x`) along with their live UI readouts, and initializes Web Speech voices (`tts.initializeVoices()`).
 
 ### State Structure (`src/context.mjs`)
 
 `createAppContext(els, doc)` separates state into two buckets:
-- **`context.state`**: UI/interaction state (current text, active preset/mode, timers, carousel drag and swipe gesture tracking, `smartHeadings`).
+- **`context.state`**: UI/interaction state (current text, active preset/mode, timers, carousel drag and swipe gesture tracking).
 - **`context.runtime`**: Operational state split into `runtime.reader` (`activeRenderId`, `lastActiveElement`) and `runtime.tts` (voices, word spans/metadata, chunk queue, playback state machine, timers, monotonic `speechGeneration`, mobile/support flags).
 
 ## Module Reference (`src/`)
@@ -56,17 +52,14 @@ flowchart TD
 | `constants.mjs` | Character limit (`1,000,000`), valid fonts/sizes/themes, `THEME_COLORS`, 20 presets (`lightPresets`, `darkPresets`), and TTS timing/chunk/speed constants |
 | `context.mjs` | Shared per-document `state` and `runtime` container |
 | `dom.mjs` | Centralized DOM lookup (`collectElements`) |
-| `markdown-parser.mjs` | Custom `Marked` instance, URL allowlisting, HTML escaping, heading ID slugification & deduplication, reserved ID protection, and smart heading heuristics |
-| `parser.mjs` | Parser facade and `enforceExtractedTextLimit()` |
+| `markdown-parser.mjs` | Custom `Marked` instance, URL allowlisting, HTML escaping, heading ID slugification & deduplication, reserved ID protection, smart heading heuristics, and `enforceExtractedTextLimit()` |
 | `preset-carousel.mjs` | Preset track animation, on-demand rAF drag physics, touch/mobile swipe gestures, gesture hint toast (`<Mode> · <desc>`), and keyboard shortcut eligibility |
 | `reader-navigation.mjs` | Mobile bottom sheet dialog semantics (`role="dialog"`, `aria-modal="true"`), `--mobile-sheet-height` CSS variable sync, focus trap, scroll lock, and viewport resize synchronization |
 | `reader-renderer.mjs` | Asynchronous, frame-budgeted Markdown token rendering with render-ID cancellation and threshold-gated loading overlay |
 | `reader.mjs` | View switching (`enterReader`/`goBack`), scroll progress bar, desktop/tablet toolbar auto-hide/hover lock and tap-reveal guards, click-to-speak gating, and global keyboard handling |
 | `settings.mjs` | Font, theme, `theme-color` meta sync, size, live typography readouts (`line-height`, `letter-spacing`, responsive margin cap), exclusive accordion toggling, and `.tts-interactive` class sync |
-| `storage.mjs` | Targeted removal of 16 legacy `reader_*` keys from `localStorage` and `sessionStorage` |
 | `tts-core.mjs` | 190-character boundary chunking, voice deduplication/sorting/selection, and non-destructive DOM word tokenization |
 | `tts-controller.mjs` | Web Speech API playback state machine, inline SVG play/pause icons, word highlighting, fallback estimation timer, desktop keep-alive, and page visibility/hide recovery |
-| `tts.mjs` | Public facade re-exporting `createTTS` and `tts-core.mjs` helpers |
 | `ui.mjs` | Single-active-banner status routing (`#statusMessage` / `#readerStatusMessage`), loading overlay, debounced polite `aria-live` announcer (`#liveAnnouncer`), and `inert`/`tabindex` focusability management |
 | `utils.mjs` | `escapeHtml`, `formatError`, numeric/index clamping, `getElementTarget`, `getScrollTop`, capability-based `isMobileDevice`, `getDoc`, `isListenSectionOpen`, and `cancelPendingRender` |
 
@@ -117,20 +110,14 @@ The TTS subsystem is split into pure helpers (`src/tts-core.mjs`) and the statef
   - On touch-primary mobile devices (`isMobileDevice()`), pausing cancels the utterance and resuming restarts cleanly from `currentWordIndex`.
   - `visibilitychange` (when hidden) pauses active playback and flags `visibilityInterrupted` so resuming restarts cleanly from `currentWordIndex`. `pagehide` also pauses playback and starts a `15000ms` (`PAGEHIDE_CANCEL_TIMEOUT`) timer—cleared on `pageshow`, resume, or stop—that cancels pending speech and sets `speechCanceledWhileHidden`. On desktop, any pause lasting longer than `10000ms` likewise restarts cleanly from `currentWordIndex` on resume.
 
-## Service Worker & Storage Isolation
+## Service Worker (`sw.js`)
 
-### Service Worker (`sw.js`)
-
-- **Atomic precaching (`install`):** Precaches all 27 `APP_SHELL` URLs into `CACHE_NAME` (`reader-webapp-shell-v14`) with `{ cache: 'reload' }` and calls `self.skipWaiting()`.
+- **Atomic precaching (`install`):** Precaches all 24 `APP_SHELL` URLs into `CACHE_NAME` (`reader-webapp-shell-v15`) with `{ cache: 'reload' }` and calls `self.skipWaiting()`.
 - **Cache cleanup (`activate`):** Deletes stale caches matching `reader-webapp-*` and calls `self.clients.claim()`.
 - **Fetch strategies:**
   - **Canonical navigations (`./`, `./index.html`):** Network-first (`cache: 'no-cache'`), mirroring successful responses under both `ROOT_URL` and `INDEX_URL`, falling back to the cached app shell when offline or when a non-OK response occurs.
   - **Canonical app-shell assets:** Stale-while-revalidate (serves cached asset immediately while refreshing in the background via `event.waitUntil()`).
   - **Everything else:** Passes through to the network untouched.
-
-### Legacy Storage Cleanup (`src/storage.mjs`)
-
-Reader Webapp stores no user content or preferences in browser storage. On startup, `cleanupLegacyBrowserStorage()` deletes only 16 explicitly listed legacy `reader_*` keys from `localStorage` and `sessionStorage`, catching access or quota errors independently per storage area and preserving all unrelated keys on the same origin.
 
 ## Verification Layers
 
@@ -138,5 +125,5 @@ Automated checks in `.github/workflows/quality-checks.yml` span four layers:
 
 1. **Static hygiene & lint:** Required-file, CSP, and no-CDN checks, ESM syntax/import/export validation (`scripts/check-syntax.js`), and pinned ESLint (`8.57.1`).
 2. **PWA & service worker integrity:** Manifest, icon, and `APP_SHELL` module-graph completeness (`scripts/validate-pwa.js`) plus simulated SW install/activate/fetch tests (`tests/test_pwa.js`).
-3. **Node unit, regression, stress & storage suites:** Lightweight DOM-mocked (`tests/mock_dom.js`) unit, TTS controller, CSS/WCAG contrast/UI regression (`tests/test_regressions.js`), large-document stress (`tests/test_empirical_stress.js`), and storage-isolation (`tests/test_storage.js`) tests.
-4. **Headless browser E2E checks:** Desktop and mobile Playwright smoke (`scripts/smoke-playwright.js`) and deep E2E regression (`scripts/deep-playwright.js`) suites running against an in-process static server (`scripts/browser-smoke-utils.js`).
+3. **Node unit, regression & stress suites:** Lightweight DOM-mocked (`tests/mock_dom.js`) unit, TTS controller, CSS/WCAG contrast/UI regression (`tests/test_regressions.js`), and large-document stress (`tests/test_empirical_stress.js`) tests.
+4. **Headless browser E2E checks:** Deep desktop and mobile Playwright regression suite (`scripts/deep-playwright.js`) running against an in-process static server (`scripts/browser-smoke-utils.js`), verifying ES module requests, sanitization, carousel drag, typography, TTS lifecycle, offline SW reload, mobile bottom sheet flow, and FAB clearance.

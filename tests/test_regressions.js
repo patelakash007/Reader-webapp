@@ -28,8 +28,9 @@ function withSavedGlobals(keys, fn) {
 }
 
 (async () => {
-  const parser = await import('../src/parser.mjs');
-  const tts = await import('../src/tts.mjs');
+  const parser = await import('../src/markdown-parser.mjs');
+  const ttsCore = await import('../src/tts-core.mjs');
+  const { createTTS } = await import('../src/tts-controller.mjs');
   const utils = await import('../src/utils.mjs');
   const constants = await import('../src/constants.mjs');
   const { createAppContext } = await import('../src/context.mjs');
@@ -247,16 +248,12 @@ function withSavedGlobals(keys, fn) {
     invalidateTokenization() {},
     tokenize() {}
   };
-  const mockParser = {
-    enforceExtractedTextLimit: t => t
-  };
   const mockSettings = () => ({
     resetSettingsSections() {}
   });
 
   const reader = createReader(mockContext, {
     ui: mockUI,
-    parser: mockParser,
     tts: mockTTS,
     getSettings: mockSettings
   });
@@ -331,7 +328,7 @@ function withSavedGlobals(keys, fn) {
       { classList: makeClassList(), scrollIntoView() {} },
       { classList: makeClassList(), scrollIntoView() {} }
     ];
-    const ttsEngine = tts.createTTS(multiChunkContext, { ui: mockUI });
+    const ttsEngine = createTTS(multiChunkContext, { ui: mockUI });
     ttsEngine.restartFromWord(0);
     assert.strictEqual(multiChunkContext.runtime.tts.state, 'playing');
     await new Promise(resolve => setTimeout(resolve, 80));
@@ -357,7 +354,7 @@ function withSavedGlobals(keys, fn) {
   const ttsInvalidateContext = createAppContext({
     readerContent: { textContent: '', querySelectorAll: () => [], insertAdjacentHTML() {} }
   });
-  const ttsEngine2 = tts.createTTS(ttsInvalidateContext, { ui: mockUI });
+  const ttsEngine2 = createTTS(ttsInvalidateContext, { ui: mockUI });
   ttsInvalidateContext.runtime.tts.wordMeta = [{ index: 0, text: 'old', start: 0, end: 3 }];
   ttsInvalidateContext.runtime.tts.wordSpans = [{ classList: makeClassList() }];
   ttsInvalidateContext.runtime.tts.fullSpokenText = 'old';
@@ -381,7 +378,7 @@ function withSavedGlobals(keys, fn) {
 
   withSavedGlobals(['NodeFilter'], () => {
     delete global.NodeFilter;
-    const tokRes = tts.tokenizeReaderDOM(mockContainer, mockDoc19);
+    const tokRes = ttsCore.tokenizeReaderDOM(mockContainer, mockDoc19);
     assert(tokRes.text.includes('Subheading Level 4\n\nParagraph text'), `h4 must be separated by \\n\\n from paragraph, got: ${JSON.stringify(tokRes.text)}`);
   });
   console.log('✓ h4-h6 block boundaries preserved and missing global NodeFilter handled safely.');
@@ -403,7 +400,6 @@ function withSavedGlobals(keys, fn) {
   });
   const sheetReader = createReader(sheetContext, {
     ui: mockUI,
-    parser: mockParser,
     tts: mockTTS,
     getSettings: mockSettings
   });
@@ -463,7 +459,6 @@ function withSavedGlobals(keys, fn) {
     };
     const readerInstance = createReader(clickContext, {
       ui: mockUI,
-      parser: mockParser,
       tts: mockTTSController,
       getSettings: mockSettings
     });
@@ -542,7 +537,6 @@ function withSavedGlobals(keys, fn) {
   });
   const backReader = createReader(backContext, {
     ui: mockUI,
-    parser,
     tts: mockTTS,
     getSettings: mockSettings
   });
@@ -632,15 +626,6 @@ function withSavedGlobals(keys, fn) {
   });
   console.log('✓ Desktop mouse drag preset handler safely guarded against accidental theme switching.');
 
-  console.log('\n--- 34. PWA: sw.js precache excludes heavy PDF.js bundles (F-19) ---');
-  const swCode = fs.readFileSync(path.join(__dirname, '../sw.js'), 'utf8');
-  assert(!swCode.includes("'./vendor/pdf.min.mjs'"), 'sw.js APP_SHELL must not precache vendor/pdf.min.mjs');
-  assert(!swCode.includes("'./vendor/pdf.worker.min.mjs'"), 'sw.js APP_SHELL must not precache vendor/pdf.worker.min.mjs');
-  assert(!swCode.includes("'./vendor/pdf.min.js'"), 'sw.js APP_SHELL must not precache vendor/pdf.min.js');
-  assert(!swCode.includes("'./vendor/pdf.worker.min.js'"), 'sw.js APP_SHELL must not precache vendor/pdf.worker.min.js');
-  assert(swCode.includes('staleWhileRevalidate'), 'sw.js must provide stale-while-revalidate runtime caching for vendor assets');
-  console.log('✓ sw.js APP_SHELL precache excludes heavy PDF.js bundles.');
-
   console.log('\n--- 35. TTS: Fallback estimate timer execution with startingChunkIndex (F-06) ---');
   await withSavedGlobals(['SpeechSynthesisUtterance'], async () => {
     global.SpeechSynthesisUtterance = FakeUtterance;
@@ -665,7 +650,7 @@ function withSavedGlobals(keys, fn) {
       { classList: makeClassList(), scrollIntoView() {} }
     ];
     timerContext.runtime.tts.fullSpokenText = 'hello world';
-    const estimateTTS = tts.createTTS(timerContext, { ui: mockUI });
+    const estimateTTS = createTTS(timerContext, { ui: mockUI });
     estimateTTS.startSpeech(0);
     assert(uttered, 'Utterance must be dispatched');
     uttered.onstart();
@@ -871,7 +856,7 @@ function withSavedGlobals(keys, fn) {
     tokContainer.appendChild(tokH1);
     tokContainer.appendChild(tokP);
 
-    const tokResult = tts.tokenizeReaderDOM(tokContainer, tokDoc);
+    const tokResult = ttsCore.tokenizeReaderDOM(tokContainer, tokDoc);
     assert(tokContainer.textContent.includes('Smoke Test'), `DOM textContent must preserve spaces between words, got: ${tokContainer.textContent}`);
     assert(tokContainer.textContent.includes('Reader Webapp renders Markdown text in browser smoke checks.'), `DOM textContent must preserve spaces around formatted spans, got: ${tokContainer.textContent}`);
     assert.strictEqual(tokResult.spans.length, 11, `Expected 11 word spans, got: ${tokResult.spans.length}`);
@@ -988,7 +973,7 @@ function withSavedGlobals(keys, fn) {
     ];
     ttsFixContext.runtime.tts.wordSpans = ttsFixSpans;
     ttsFixContext.runtime.tts.fullSpokenText = 'Alpha Beta Gamma';
-    const ttsFixController = tts.createTTS(ttsFixContext, { ui: mockUI });
+    const ttsFixController = createTTS(ttsFixContext, { ui: mockUI });
     ttsFixController.startSpeech(0);
     assert(ttsFixUtterance, 'Initial utterance should be created');
     ttsFixUtterance.onstart();
@@ -1040,11 +1025,11 @@ function withSavedGlobals(keys, fn) {
     tbl.appendChild(row);
     richContainer.appendChild(tbl);
 
-    const firstPass = tts.tokenizeReaderDOM(richContainer, richDoc);
+    const firstPass = ttsCore.tokenizeReaderDOM(richContainer, richDoc);
     assert(firstPass.text.includes('bold.'), `Trailing punctuation after inline element must not gain an extra space: ${JSON.stringify(firstPass.text)}`);
     assert(firstPass.text.includes('Header\n\nValue'), `Table cells must have block pauses: ${JSON.stringify(firstPass.text)}`);
 
-    const secondPass = tts.tokenizeReaderDOM(richContainer, richDoc);
+    const secondPass = ttsCore.tokenizeReaderDOM(richContainer, richDoc);
     assert.strictEqual(secondPass.spans.length, firstPass.spans.length, 'Re-running tokenizeReaderDOM must be idempotent');
     assert.strictEqual(secondPass.text, firstPass.text, 'Re-running tokenizeReaderDOM must preserve exact spoken text');
   });
@@ -1094,7 +1079,6 @@ function withSavedGlobals(keys, fn) {
         ...mockUI,
         setContainerFocusable(_el, enabled) { focusHistory.push(enabled); }
       },
-      parser: mockParser,
       tts: mockTTS,
       getSettings: mockSettings
     });
@@ -1169,7 +1153,6 @@ function withSavedGlobals(keys, fn) {
     });
     const hoverReader = createReader(hoverCtx, {
       ui: mockUI,
-      parser: mockParser,
       tts: mockTTS,
       getSettings: () => ({ resetSettingsSections() {}, canUseGlobalPresetShortcut: () => false })
     });
@@ -1325,7 +1308,7 @@ function withSavedGlobals(keys, fn) {
     pBr.appendChild(spDoc.createTextNode('Line two'));
     spRoot.appendChild(pBr);
 
-    const spResult = tts.tokenizeReaderDOM(spRoot, spDoc);
+    const spResult = ttsCore.tokenizeReaderDOM(spRoot, spDoc);
     assert(spResult.text.includes('(bold)'), `Parentheses around inline tag must not get extra spaces: ${JSON.stringify(spResult.text)}`);
     assert(spResult.text.includes('unbelievable'), `Split inline word must not get extra space: ${JSON.stringify(spResult.text)}`);
     assert(spResult.text.includes('Hello world'), `Whitespace node between inline elements must remain a space: ${JSON.stringify(spResult.text)}`);
@@ -1333,7 +1316,7 @@ function withSavedGlobals(keys, fn) {
   });
 
   const emojiStr = 'a'.repeat(189) + '🚀' + 'b'.repeat(20);
-  const emojiChunks = tts.chunkText(emojiStr, 0, 190);
+  const emojiChunks = ttsCore.chunkText(emojiStr, 0, 190);
   assert.strictEqual(emojiChunks.length, 2);
   assert.strictEqual(emojiChunks[0].text.length, 189, 'chunkText must not bisect a UTF-16 surrogate pair');
   assert(emojiChunks[1].text.startsWith('🚀'), 'Surrogate pair emoji must stay intact in the next chunk');
@@ -1461,7 +1444,7 @@ function withSavedGlobals(keys, fn) {
     brStrong.appendChild(brDoc.createTextNode('Second line'));
     brP.appendChild(brStrong);
     brRoot.appendChild(brP);
-    const brTok = tts.tokenizeReaderDOM(brRoot, brDoc);
+    const brTok = ttsCore.tokenizeReaderDOM(brRoot, brDoc);
     assert.strictEqual(brTok.text, 'First line\nSecond line', `<br> before inline element must insert newline, got: ${JSON.stringify(brTok.text)}`);
 
     global.SpeechSynthesisUtterance = class MockUtterance {
@@ -1511,7 +1494,7 @@ function withSavedGlobals(keys, fn) {
       { index: 1, text: 'world', start: 6, end: 11 }
     ];
     ctx52.runtime.tts.fullSpokenText = 'Hello world';
-    const ctrl52 = tts.createTTS(ctx52, { ui: mockUI });
+    const ctrl52 = createTTS(ctx52, { ui: mockUI });
 
     ctrl52.startSpeech(0);
     // Voice URI starting with digit must fall back to index 0, not parseInt('1_removed_uri') === 1
@@ -1601,7 +1584,6 @@ function withSavedGlobals(keys, fn) {
     const ui53 = createUI(ctx53);
     const reader53 = createReader(ctx53, {
       ui: ui53,
-      parser: mockParser,
       tts: mockTTS,
       getSettings: () => settings53
     });
@@ -1749,7 +1731,6 @@ function withSavedGlobals(keys, fn) {
 
     const reader56 = createReader(ctx56, {
       ui: ui56,
-      parser: mockParser,
       tts: mockTTS,
       getSettings: mockSettings
     });

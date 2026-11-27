@@ -593,7 +593,6 @@ export function createTTS(context, { ui }) {
     populateVoices,
     restartFromWord,
     resumeSpeech,
-    setState,
     startSpeech,
     stopTTS,
     tokenize,

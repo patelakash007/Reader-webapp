@@ -6,8 +6,8 @@ const path = require('node:path');
 const { MockDocument } = require('./mock_dom');
 
 (async () => {
-  const parser = await import('../src/parser.mjs');
-  const tts = await import('../src/tts.mjs');
+  const parser = await import('../src/markdown-parser.mjs');
+  const tts = await import('../src/tts-core.mjs');
   const constants = await import('../src/constants.mjs');
   const { createAppContext } = await import('../src/context.mjs');
   const scriptSource = fs.readFileSync(path.join(__dirname, '../script.js'), 'utf8');
@@ -32,7 +32,6 @@ const { MockDocument } = require('./mock_dom');
   assert(scriptSource.includes("import('./src/app.mjs')"), 'script.js should dynamically import the ES module application entry');
   assert(!scriptSource.includes('speechGeneration'), 'speech session state should not leak into the compatibility shim');
   const initialContext = createAppContext({});
-  assert.strictEqual(initialContext.state.smartHeadings, true, 'state.smartHeadings must initialize to true');
   assert.strictEqual(initialContext.runtime.reader.activeRenderId, 0, 'activeRenderId must initialize to 0');
   console.log('✓ Check 1: Compatibility entry and module contract validation passed.');
 
@@ -54,10 +53,10 @@ const { MockDocument } = require('./mock_dom');
   assert.deepStrictEqual(giantChunks.map(chunk => chunk.text.length), [190, 60]);
   console.log('✓ Check 2: 190-character chunking algorithm passed.');
 
-  const parserInstance = parser.createParser();
-  assert.strictEqual(typeof parserInstance.enforceExtractedTextLimit, 'function');
-  assert.strictEqual(typeof parserInstance.parseMarkdownToHtml, 'function');
-  console.log('✓ Check 3: Parser factory contract passed.');
+  assert.strictEqual(typeof parser.enforceExtractedTextLimit, 'function');
+  assert.strictEqual(typeof parser.parseMarkdownToHtml, 'function');
+  assert.strictEqual(typeof parser.createMarkdownRenderer, 'function');
+  console.log('✓ Check 3: Markdown parser module contract passed.');
 
   const mockVoices = [
     { name: 'Google US English', lang: 'en-US', voiceURI: 'google-en-us', default: false },

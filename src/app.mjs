@@ -6,11 +6,9 @@ import {
 } from './constants.mjs';
 import { createAppContext } from './context.mjs';
 import { collectElements } from './dom.mjs';
-import { createParser } from './parser.mjs';
 import { createReader } from './reader.mjs';
 import { createSettings } from './settings.mjs';
-import { cleanupLegacyBrowserStorage } from './storage.mjs';
-import { createTTS } from './tts.mjs';
+import { createTTS } from './tts-controller.mjs';
 import { createUI } from './ui.mjs';
 
 const initializedDocuments = new WeakSet();
@@ -39,7 +37,6 @@ export function init(documentObject = document) {
   const context = createAppContext(els, documentObject);
   const ui = createUI(context);
   const tts = createTTS(context, { ui });
-  const parser = createParser();
   let reader;
   const settings = createSettings(context, {
     isMobileSheetLayout: () => reader && reader.isMobileSheetLayout(),
@@ -48,12 +45,10 @@ export function init(documentObject = document) {
   });
   reader = createReader(context, {
     getSettings: () => settings,
-    parser,
     tts,
     ui
   });
 
-  cleanupLegacyBrowserStorage();
   registerServiceWorker(documentObject);
   settings.bindEvents();
   reader.bindEvents();
@@ -87,5 +82,5 @@ export function init(documentObject = document) {
   }
 
   tts.initializeVoices();
-  return { context, parser, reader, settings, tts, ui };
+  return { context, reader, settings, tts, ui };
 }

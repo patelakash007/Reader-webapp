@@ -41,10 +41,9 @@ Pull requests and pushes to `main` run `.github/workflows/quality-checks.yml` on
 npm run test:syntax      # JS syntax + ESM import/export & missing-import verification
 npm run lint             # Pinned ESLint 8.57.1 across script.js, sw.js, src/, scripts/, tests/
 npm run test:pwa         # Manifest, icons, sw.js APP_SHELL completeness & SW unit tests
-npm run test:unit        # Reader, TTS controller, regression & storage isolation suites
+npm run test:unit        # Reader, TTS controller & regression suites
 npm run test:empirical   # Large-document parsing & highlight lookup stress tests
-npm run test:smoke       # Desktop & mobile Playwright smoke checks
-npm run test:deep        # Deep Playwright E2E checks (XSS, carousel, TTS, offline SW, mobile sheet)
+npm run test:deep        # Deep Playwright E2E checks (ES modules, XSS, carousel, TTS, offline SW, mobile sheet)
 ```
 
 You can run all non-browser checks in one command with `npm test`, followed by `npm run lint`.
@@ -60,7 +59,7 @@ When making changes in specific areas, remember these invariants (enforced by te
 
 ### Adding, renaming, or editing app-shell files
 - If you add or rename a module under `src/`, an icon, or another shell asset, update `APP_SHELL` in `sw.js` (`scripts/validate-pwa.js` automatically verifies the full `src/app.mjs` module graph against `APP_SHELL`).
-- Whenever any file listed in `APP_SHELL` changes in a release-worthy way, bump `CACHE_NAME` in `sw.js` (e.g., `reader-webapp-shell-v14` → `v15`) so returning PWA clients receive updates atomically.
+- Whenever any file listed in `APP_SHELL` changes in a release-worthy way, bump `CACHE_NAME` in `sw.js` (e.g., `reader-webapp-shell-v15` → `v16`) so returning PWA clients receive updates atomically.
 
 ### Modifying HTML controls or element IDs (`index.html`)
 - Add any new element IDs (including dynamically created ones such as `liveannouncer`) to `RESERVED_DOM_IDS` in `src/markdown-parser.mjs` (lowercase) so Markdown heading slugs cannot collide with app-shell elements.

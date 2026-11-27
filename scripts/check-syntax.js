@@ -24,8 +24,7 @@ const allFiles = [...rootFiles, ...srcFiles, ...scriptFiles, ...testFiles];
 
 // 1. JavaScript syntax validation on all files
 for (const filePath of allFiles) {
-  const checkArgs = process.versions && process.versions.deno ? ['cache', filePath] : ['--check', filePath];
-  const result = spawnSync(process.execPath, checkArgs, { encoding: 'utf8' });
+  const result = spawnSync(process.execPath, ['--check', filePath], { encoding: 'utf8' });
   if (result.status !== 0) {
     process.stderr.write(result.stderr || `Syntax check failed for ${filePath}.\n`);
     process.exit(result.status || 1);

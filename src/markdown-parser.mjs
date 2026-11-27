@@ -1,3 +1,4 @@
+import { MAX_EXTRACTED_TEXT_CHARS } from './constants.mjs';
 import { escapeHtml } from './utils.mjs';
 import { Marked } from '../vendor/marked.esm.mjs';
 
@@ -5,7 +6,7 @@ const RESERVED_DOM_IDS = new Set([
   'app', 'progressbar', 'sheetbackdrop', 'mobilefab', 'inputview', 'pastearea',
   'readbtn', 'clearbtn', 'statusmessage', 'readerview', 'backbtn', 'toolbar',
   'bottomsheethandle', 'settingsdrawer', 'themesettingssummary', 'themesettingspanel',
-  'presetcarousel', 'arrowleft', 'presetwindow', 'presettrack', 'arrowright',
+  'arrowleft', 'presetwindow', 'presettrack', 'arrowright',
   'presetdots', 'modelight', 'modedark', 'textsettingspanel', 'lineheightinput',
   'lineheightval', 'letterspacinginput', 'letterspacingval', 'margininput', 'marginval',
   'listensettingspanel', 'ttsbtn', 'ttsstopbtn', 'voiceselect', 'voicerateval',
@@ -65,7 +66,7 @@ export function normalizeSafeLinkHref(escapedUrl) {
   }
 }
 
-export function isSmartHeading(trimmed) {
+function isSmartHeading(trimmed) {
   if (typeof trimmed !== 'string' || trimmed.length < 4 || trimmed.length > 55) return false;
   if (/[\r\n]/.test(trimmed)) return false;
   if (!/^[A-Z][A-Z0-9 \t:—–-]{2,55}[A-Z0-9]$/.test(trimmed)) return false;
@@ -93,7 +94,7 @@ function slugifyHeading(text) {
     .replace(/^-|-$/g, '');
 }
 
-export function createMarkedInstance() {
+function createMarkedInstance() {
   const instance = new Marked();
   instance.use({
     gfm: true,
@@ -177,11 +178,6 @@ function countNewlines(str) {
   return count;
 }
 
-export function parseInline(text) {
-  if (!text) return '';
-  return defaultMarkedInstance.parseInline(String(text));
-}
-
 export function createMarkdownRenderer(smartHeadings = true) {
   const marked = defaultMarkedInstance;
 
@@ -258,7 +254,13 @@ export function createMarkdownRenderer(smartHeadings = true) {
   };
 }
 
-export { escapeHtml };
+export function enforceExtractedTextLimit(text, context = 'document') {
+  const value = typeof text === 'string' ? text : '';
+  if (value.length > MAX_EXTRACTED_TEXT_CHARS) {
+    throw new Error(`This ${context} contains too much extracted text for the browser reader. Limit is ${MAX_EXTRACTED_TEXT_CHARS.toLocaleString()} characters.`);
+  }
+  return value;
+}
 
 export function parseMarkdownToHtml(text, smartHeadings = true) {
   const renderer = createMarkdownRenderer(smartHeadings);

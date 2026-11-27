@@ -697,10 +697,6 @@
     animation: sectionReveal 0.2s ease-out;
   }
 
-  .settings-section-panel[hidden] {
-    display: none;
-  }
-
   .settings-panel-inner {
     display: flex;
     flex-direction: column;
@@ -742,8 +738,7 @@
     gap: 5px;
   }
 
-  .control-item label,
-  .control-label-row label {
+  .control-item label {
     font-size: 12px;
     font-weight: 600;
     color: var(--text);
@@ -1012,7 +1007,6 @@
     }
     
     #toolbar {
-      position: fixed;
       top: auto;
       bottom: 0;
       left: 0;
@@ -1094,10 +1088,6 @@
       font-size: 12px;
     }
 
-    .settings-section-panel {
-      padding: 0 12px 12px;
-    }
-
     .settings-panel-inner {
       gap: 10px;
     }
@@ -1109,8 +1099,6 @@
     .tb-btn {
       padding: 8px 10px;
       font-size: 13.5px;
-      min-height: 44px;
-      border-radius: 12px;
     }
 
     .settings-row {
@@ -1125,11 +1113,11 @@
     .preset-window { border-radius: 14px; }
     .preset-card { padding: 10px 12px; }
     .preset-name { font-size: 16px; }
-    .preset-arrow { width: 44px; height: 44px; border-radius: 14px; }
+    .preset-arrow { border-radius: 14px; }
     
     .back-btn { 
-      width: 44px; height: 44px; top: calc(16px + env(safe-area-inset-top, 0px)); left: calc(16px + env(safe-area-inset-left, 0px));
-      border-radius: 14px; background: var(--toolbar-bg);
+      top: calc(16px + env(safe-area-inset-top, 0px)); left: calc(16px + env(safe-area-inset-left, 0px));
+      border-radius: 14px;
       border-color: color-mix(in srgb, var(--accent) 15%, transparent);
     }
     

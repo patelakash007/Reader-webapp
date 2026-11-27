@@ -1,8 +1,9 @@
+import { enforceExtractedTextLimit } from './markdown-parser.mjs';
 import { cancelPendingRender, formatError, getDoc, getElementTarget, getScrollTop, isListenSectionOpen } from './utils.mjs';
 import { createReaderRenderer } from './reader-renderer.mjs';
 import { createReaderNavigation } from './reader-navigation.mjs';
 
-export function createReader(context, { ui, parser, tts, getSettings }) {
+export function createReader(context, { ui, tts, getSettings }) {
   const { els, state } = context;
   let initialized = false;
   let scrollProgressPending = false;
@@ -138,7 +139,7 @@ export function createReader(context, { ui, parser, tts, getSettings }) {
     }
     let safeText;
     try {
-      safeText = parser.enforceExtractedTextLimit(text, 'pasted text');
+      safeText = enforceExtractedTextLimit(text, 'pasted text');
     } catch (err) {
       ui.showStatus(formatError(err), 'error');
       return;

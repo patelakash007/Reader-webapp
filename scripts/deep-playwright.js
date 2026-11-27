@@ -178,11 +178,21 @@ async function runDeepPlaywrightChecks() {
     await page.waitForSelector('#app');
     assert(/Reader Webapp/i.test(title), `Unexpected page title: ${title}`);
     const moduleFiles = getAppModuleFiles();
-    const moduleStatuses = await page.evaluate(async files => Promise.all(files.map(async file => {
-      const response = await fetch(file, { cache: 'no-store' });
-      return { file, status: response.status };
-    })), moduleFiles);
-    assert(moduleStatuses.every(module => module.status === 200), `ES module asset check failed: ${JSON.stringify(moduleStatuses)}`);
+    const moduleStatuses = await page.evaluate(async files => {
+      const responses = await Promise.all(files.map(async file => {
+        const response = await fetch(file, { cache: 'no-store' });
+        return { file, status: response.status };
+      }));
+      const resourceNames = new Set(performance.getEntriesByType('resource').map(entry => entry.name));
+      return responses.map(result => ({
+        ...result,
+        requested: resourceNames.has(new URL(result.file, location.href).href)
+      }));
+    }, moduleFiles);
+    assert(
+      moduleStatuses.every(module => module.status === 200 && module.requested),
+      `ES module asset check failed: ${JSON.stringify(moduleStatuses)}`
+    );
     screenshots.push(path.join(outputDir, 'deep-initial.png'));
     await page.screenshot({ path: screenshots[screenshots.length - 1], fullPage: false });
     results.push('Initial app shell loaded.');
@@ -383,7 +393,6 @@ async function runDeepPlaywrightChecks() {
     await mobilePage.waitForSelector('#readerView.active');
     await mobilePage.click('#mobileFab');
     await mobilePage.waitForSelector('#toolbar.expanded');
-    await mobilePage.waitForSelector('#settingsDrawer.active');
     await mobilePage.waitForFunction(() => {
       const toolbar = document.querySelector('#toolbar');
       const toolbarRect = toolbar ? toolbar.getBoundingClientRect() : { top: 0 };
@@ -406,16 +415,40 @@ async function runDeepPlaywrightChecks() {
         expanded: section.querySelector('.settings-section-toggle')?.getAttribute('aria-expanded'),
         hidden: section.querySelector('.settings-section-panel')?.hidden
       }));
+      const blockedControls = (() => {
+        if (!fab || !toolbar) return [];
+        const controls = Array.from(toolbar.querySelectorAll('button, input, select, [tabindex]'))
+          .filter(control => control !== fab);
+        function isFabHitAt(x, y) {
+          const target = document.elementFromPoint(x, y);
+          return target === fab || (target && fab.contains(target));
+        }
+        return controls
+          .filter(control => {
+            const rect = control.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) return false;
+            const points = [
+              [rect.left + rect.width / 2, rect.top + rect.height / 2],
+              [rect.right - 4, rect.top + rect.height / 2],
+              [rect.left + 4, rect.top + rect.height / 2]
+            ];
+            return points.some(([x, y]) => (
+              x >= 0 && y >= 0 && x <= window.innerWidth && y <= window.innerHeight && isFabHitAt(x, y)
+            ));
+          })
+          .map(control => control.id || control.getAttribute('aria-label') || control.textContent.trim() || control.tagName);
+      })();
 
       return {
         fabExpanded: document.querySelector('#mobileFab')?.getAttribute('aria-expanded'),
         fabVisible: Boolean(fabRect && fabRect.width > 0 && fabRect.height > 0),
         fabAboveSheet: Boolean(fabRect && fabRect.bottom <= toolbarRect.top + 8),
         fabRect: fabRect ? { top: fabRect.top, bottom: fabRect.bottom, left: fabRect.left, right: fabRect.right } : null,
+        blockedControls,
         toolbarExpanded: toolbar?.classList.contains('expanded'),
         toolbarTop: toolbarRect.top,
         toolbarScrollTop: toolbar ? toolbar.scrollTop : 0,
-        drawerExpanded: document.querySelector('#settingsDrawer')?.classList.contains('active'),
+        drawerPresent: Boolean(document.querySelector('#settingsDrawer')),
         sectionStates,
         bodyOverflow: getComputedStyle(document.body).overflow,
         bodyWidth: document.body.scrollWidth,
@@ -423,9 +456,10 @@ async function runDeepPlaywrightChecks() {
         backdropTapTargetId: backdropTapTarget ? backdropTapTarget.id : ''
       };
     });
-    assert(mobileState.fabExpanded === 'true' && mobileState.toolbarExpanded && mobileState.drawerExpanded, 'Mobile sheet or settings state did not expand.');
+    assert(mobileState.fabExpanded === 'true' && mobileState.toolbarExpanded && mobileState.drawerPresent, 'Mobile sheet or settings state did not expand.');
     assert(mobileState.fabVisible, 'Mobile settings close pill was hidden while the sheet was open.');
     assert(mobileState.fabAboveSheet, `Mobile settings close pill overlapped the bottom sheet controls (fabBottom=${mobileState.fabRect?.bottom}, toolbarTop=${mobileState.toolbarTop}).`);
+    assert(mobileState.blockedControls.length === 0, `Mobile settings FAB blocks toolbar controls: ${mobileState.blockedControls.join(', ')}`);
     assert(mobileState.toolbarTop >= 120, `Mobile sheet left too little tappable backdrop above it: top=${mobileState.toolbarTop}.`);
     assert(mobileState.toolbarScrollTop === 0, `Mobile settings drawer scrolled top controls away: scrollTop=${mobileState.toolbarScrollTop}.`);
     assert(mobileState.sectionStates.find(section => section.name === 'theme')?.expanded === 'true', 'Theme section was not open by default on mobile.');

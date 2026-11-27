@@ -21,7 +21,6 @@ export function createAppContext(els, doc = null) {
       gestureStartY: 0,
       gestureStartTime: 0,
       isGesture: false,
-      smartHeadings: true,
       lastCarouselDragDistance: 0
     },
     runtime: {

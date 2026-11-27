@@ -214,7 +214,6 @@ export function createReaderNavigation(context, { ui, getSettings, resetToolbarT
     collapseMobileSheet,
     expandMobileSheet,
     isMobileSheetLayout,
-    resetToolbarTimer,
     syncLayoutOnResize,
     syncMobileSheetHeight,
     toggleMobileSheet

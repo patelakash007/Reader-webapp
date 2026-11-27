@@ -1,10 +1,10 @@
-import { createMarkdownRenderer } from './parser.mjs';
+import { createMarkdownRenderer } from './markdown-parser.mjs';
 import { formatError } from './utils.mjs';
 
 const LOADER_CHAR_THRESHOLD = 50_000;
 
 export function createReaderRenderer(context, { ui, tts }) {
-  const { els, state, runtime } = context;
+  const { els, runtime } = context;
 
   function renderTextAsync(text, onComplete, options = {}) {
     if (!els.readerContent) return;
@@ -28,7 +28,7 @@ export function createReaderRenderer(context, { ui, tts }) {
     }
     els.readerContent.textContent = '';
 
-    const renderer = createMarkdownRenderer(state.smartHeadings);
+    const renderer = createMarkdownRenderer();
     let tokens = [];
     let index = 0;
 

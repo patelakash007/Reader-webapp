@@ -66,25 +66,20 @@ Reader-webapp/
 │   ├── browser-smoke-utils.js            # Local static server & Chromium launcher helpers
 │   ├── check-syntax.js                   # Syntax, ESM import & cross-module export checks
 │   ├── deep-playwright.js                # Full end-to-end desktop, mobile, TTS & offline checks
-│   ├── smoke-chromium.js                 # Lightweight headless Chromium DOM/screenshot smoke
-│   ├── smoke-playwright.js               # Desktop & mobile smoke checks via Playwright
 │   └── validate-pwa.js                   # Manifest, icon & sw.js APP_SHELL integrity checks
 ├── src/
 │   ├── app.mjs                           # Application bootstrap & service worker registration
 │   ├── constants.mjs                     # Limits, 20 presets, theme colors, fonts & TTS constants
 │   ├── context.mjs                       # Shared app state and runtime session container
 │   ├── dom.mjs                           # DOM element collection
-│   ├── markdown-parser.mjs               # Marked config, sanitization, heading IDs & smart headings
-│   ├── parser.mjs                        # Parser facade & character-limit enforcement
+│   ├── markdown-parser.mjs               # Marked config, sanitization, heading IDs, smart headings & text limits
 │   ├── preset-carousel.mjs               # Preset track drag, swipe gestures, hint toast & keyboard helpers
 │   ├── reader-navigation.mjs             # Mobile bottom sheet dialog, height sync, focus trap & resize sync
 │   ├── reader-renderer.mjs               # Frame-budgeted incremental Markdown DOM rendering
 │   ├── reader.mjs                        # Reader lifecycle, scroll progress & global events
 │   ├── settings.mjs                      # Theme, font, typography readouts & exclusive settings accordion
-│   ├── storage.mjs                       # Targeted cleanup of legacy reader_* storage keys
 │   ├── tts-controller.mjs                # Playback state machine, voice lifecycle & visibility handling
 │   ├── tts-core.mjs                      # 190-char chunking, voice sorting & DOM tokenization
-│   ├── tts.mjs                           # TTS module facade
 │   ├── ui.mjs                            # Single-active status banners, loader, live announcer & focusability
 │   └── utils.mjs                         # Escaping, clamping, device/DOM helpers & render cancellation
 ├── tests/
@@ -93,7 +88,6 @@ Reader-webapp/
 │   ├── test_pwa.js                       # Service worker install, activate & fetch strategy tests
 │   ├── test_reader.js                    # Parser, chunking, voice & tokenization unit tests
 │   ├── test_regressions.js               # Comprehensive regression suite (Markdown, TTS, UI, A11y, CSS)
-│   ├── test_storage.js                   # Legacy storage cleanup & origin-isolation tests
 │   └── test_tts_controller.js            # TTS controller state machine & lifecycle tests
 ├── vendor/marked.esm.mjs                 # Vendored marked v15.0.12 ESM bundle
 ├── index.html                            # App shell markup & strict Content-Security-Policy
@@ -126,17 +120,13 @@ npm test
 
 | Command | What it checks |
 | --- | --- |
-| `npm test` | Runs syntax/import validation, PWA validation & SW behavior tests, unit tests, regressions, empirical stress tests, and storage isolation tests |
+| `npm test` | Runs syntax/import validation, PWA validation & SW behavior tests, unit tests, regressions, and empirical stress tests |
 | `npm run test:syntax` | JavaScript syntax (`node --check`), ESM import targets/exports, and cross-module missing-import checks |
 | `npm run test:pwa` | Web manifest, icon, `sw.js` `APP_SHELL` completeness, and service worker caching behavior |
-| `npm run test:unit` | Core reader/TTS unit tests, TTS controller lifecycle tests, regression suite, and storage isolation tests |
-| `npm run test:regressions` | Full regression suite and legacy storage cleanup tests |
+| `npm run test:unit` | Core reader/TTS unit tests, TTS controller lifecycle tests, and the full regression suite |
 | `npm run test:empirical` | Large-document parsing and high-volume word-highlight lookup benchmarks |
-| `npm run test:storage` | Legacy browser-storage cleanup and same-origin key isolation tests |
 | `npm run lint` | Pinned ESLint (`8.57.1`) checks across `script.js`, `sw.js`, `src/`, `scripts/`, and `tests/` |
-| `npm run test:smoke` | Playwright desktop & mobile smoke tests, ES module fetch verification, and mobile FAB clearance |
-| `npm run test:deep` | Deep Playwright end-to-end checks (sanitization, carousel drag, typography, TTS lifecycle, offline SW reload, mobile sheet flow) |
-| `npm run test:chromium` | Lightweight headless Chromium DOM and screenshot smoke check (no Playwright required) |
+| `npm run test:deep` | Deep Playwright end-to-end checks (ES module requests, sanitization, carousel drag, typography, TTS lifecycle, offline SW reload, mobile sheet & FAB clearance) |
 
 ### Running browser tests locally
 
@@ -151,7 +141,7 @@ If you prefer an existing local Chromium, Chrome, or Edge executable, set `BROWS
 ## Privacy, Security & Offline Behavior
 
 - **Local-only processing.** Pasted text stays in the browser; there is no application backend or analytics.
-- **No persistence.** Reading text and settings are kept in memory only and reset on reload. On startup, [`cleanupLegacyBrowserStorage`](src/storage.mjs) removes known legacy `reader_*` keys from `localStorage` and `sessionStorage` while leaving any unrelated keys on the same origin intact.
+- **No persistence.** Reading text and settings are kept in memory only and reset on reload. Nothing is written to `localStorage`, `sessionStorage`, IndexedDB, or cookies.
 - **Strict CSP & zero CDNs.** `index.html` enforces a strict `Content-Security-Policy` (`default-src 'self'`, `object-src 'none'`, `form-action 'none'`), and CI rejects any CDN URLs in application source files.
 - **Service worker scope.** `sw.js` precaches the static application shell (HTML, CSS, JS/ESM modules, vendored Markdown parser, manifest, and icons) for offline reopening. It does not cache or persist pasted reading content. As with any web app, avoid entering sensitive data on untrusted devices or browser sessions.
 

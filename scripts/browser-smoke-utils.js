@@ -222,14 +222,12 @@ async function waitForServer(url, timeoutMs = 5000) {
 }
 
 module.exports = {
-  browserEnvVars,
   ensureOutputDir,
   findBrowserExecutable,
   getAppModuleFiles,
   launchChromiumWithFallback,
   loadPlaywright,
   outputDir,
-  rootDir,
   startStaticServer,
   waitForServer,
   writeJson

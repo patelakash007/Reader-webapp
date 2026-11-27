@@ -9,10 +9,10 @@ const SW_PATH = path.join(__dirname, '../sw.js');
 const SW_SOURCE = fs.readFileSync(SW_PATH, 'utf8');
 
 const cacheNameMatch = SW_SOURCE.match(/const\s+CACHE_NAME\s*=\s*['"]([^'"]+)['"]/);
-const CURRENT_CACHE_NAME = cacheNameMatch ? cacheNameMatch[1] : 'reader-webapp-shell-v11';
+const CURRENT_CACHE_NAME = cacheNameMatch ? cacheNameMatch[1] : 'reader-webapp-shell-v15';
 
 const appShellMatches = SW_SOURCE.match(/const\s+APP_SHELL\s*=\s*\[([\s\S]*?)\];/);
-const APP_SHELL_COUNT = appShellMatches ? (appShellMatches[1].match(/'[^']+'/g) || []).length : 27;
+const APP_SHELL_COUNT = appShellMatches ? (appShellMatches[1].match(/'[^']+'/g) || []).length : 24;
 
 class FakeResponse {
   constructor(body = '', { ok = true, status = 200 } = {}) {

@@ -48,7 +48,7 @@
     <div id="toolbar">
       <button class="bottom-sheet-handle" id="bottomSheetHandle" type="button" aria-label="Collapse Reading Settings"></button>
 
-      <div class="settings-drawer active" id="settingsDrawer" aria-label="Reading settings">
+      <div class="settings-drawer" id="settingsDrawer" aria-label="Reading settings">
         <section class="settings-section is-open" data-settings-section="theme">
           <button class="settings-section-toggle" type="button" aria-expanded="true" aria-controls="themeSettingsPanel">
             <span>
@@ -59,7 +59,7 @@
           </button>
           <div class="settings-section-panel" id="themeSettingsPanel">
             <div class="settings-panel-inner">
-              <div class="preset-carousel" id="presetCarousel">
+              <div class="preset-carousel">
                 <button class="preset-arrow" id="arrowLeft" type="button" aria-label="Previous Preset">
                   <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                 </button>
@@ -149,7 +149,7 @@
                 </button>
               </div>
               <div class="settings-row">
-                <div class="control-item voice-control">
+                <div class="control-item">
                   <label for="voiceSelect">Voice</label>
                   <select id="voiceSelect"><option value="">System default voice</option></select>
                 </div>

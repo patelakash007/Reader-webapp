@@ -141,7 +141,6 @@ export function createSettings(context, { onResetToolbarTimer, isMobileSheetLayo
   }
 
   function resetSettingsSections() {
-    if (els.settingsDrawer) els.settingsDrawer.classList.add('active');
     if (Array.isArray(els.settingsSections)) {
       els.settingsSections.forEach(section => {
         setSettingsSectionExpanded(section, section.getAttribute('data-settings-section') === 'theme');

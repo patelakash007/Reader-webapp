@@ -1,7 +1,7 @@
 'use strict';
 
 // Bump CACHE_NAME whenever APP_SHELL files change so updates install into a fresh cache atomically.
-const CACHE_NAME = 'reader-webapp-shell-v14';
+const CACHE_NAME = 'reader-webapp-shell-v15';
 const CACHE_PREFIX = 'reader-webapp-';
 const APP_SHELL = [
   './',
@@ -12,15 +12,12 @@ const APP_SHELL = [
   './src/constants.mjs',
   './src/context.mjs',
   './src/dom.mjs',
-  './src/parser.mjs',
   './src/markdown-parser.mjs',
   './src/reader.mjs',
   './src/reader-renderer.mjs',
   './src/reader-navigation.mjs',
   './src/settings.mjs',
   './src/preset-carousel.mjs',
-  './src/storage.mjs',
-  './src/tts.mjs',
   './src/tts-core.mjs',
   './src/tts-controller.mjs',
   './src/ui.mjs',

@@ -30,7 +30,6 @@ export function collectElements(document) {
     progressBar: document.getElementById('progressBar'),
     statusMessage: document.getElementById('statusMessage'),
     readerStatusMessage: document.getElementById('readerStatusMessage'),
-    settingsDrawer: document.getElementById('settingsDrawer'),
     settingsSections: Array.from(document.querySelectorAll('[data-settings-section]')),
     settingsSectionToggles: Array.from(document.querySelectorAll('.settings-section-toggle')),
     themeSettingsSummary: document.getElementById('themeSettingsSummary'),
